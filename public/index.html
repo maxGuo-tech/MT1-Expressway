@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HMCL Racing - Pro Online Edition</title>
+    <!-- 引入 Socket.io -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        /* 这里包含你提供的所有原版 CSS [1] */
+        *{margin:0;padding:0;box-sizing:border-box;touch-action:none;user-select:none;-webkit-user-select:none;}
+        :root { --main: #00f0ff; --bg: #050505; --purple: #d000ff; --green: #00ff00; --yellow: #ffff00; }
+        body{background:#000;color:var(--main);font-family:'Courier New',monospace;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden}
+        #game{position:relative;width:1000px;height:700px;border:3px solid var(--main);background: #000;transform-origin: center center;}
+        .scr{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,0.95);z-index:100}
+        .scr.on{display:flex}
+        h1{font-size:56px;color:var(--main);text-shadow:0 0 20px var(--main);margin-bottom:10px;font-style:italic;text-align:center}
+        .sub{font-size:18px;color:#fff;margin-bottom:40px;letter-spacing:4px}
+        .btn{background:transparent;border:2px solid var(--main);color:var(--main);padding:15px 50px;font-size:20px;font-family:inherit;cursor:pointer;margin:10px;min-width:240px;transition:all 0.2s;text-transform:uppercase;font-weight:bold}
+        .btn:hover{background:var(--main);color:#000;transform:skewX(-10deg)}
+        .row{margin:15px 0;font-size:18px; display: flex; align-items: center; justify-content: center; gap: 20px;}
+        .row label{font-size: 20px; color: #fff;}
+        .row select{background:#000;border:2px solid var(--main);color:var(--main);padding:10px 15px;font-size:16px;font-family:inherit;cursor: pointer;}
+        #hud{position:absolute;top:20px;left:20px;background:rgba(0,0,0,0.8);padding:15px 25px;border-left:4px solid var(--main);font-size:16px;z-index:10;pointer-events:none}
+        #hud div{margin:8px 0;color:#fff}
+        #hud span{color:var(--main);font-weight:bold}
+        #sectors-ui { position: absolute; top: 20px; right: 20px; display: flex; gap: 5px; z-index: 10; }
+        .sec-box { width: 85px; height: 55px; background: #111; border: 1px solid #444; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .sec-box span { font-size: 10px; color: #888; }
+        .sec-box div { font-size: 16px; color: #fff; font-weight: bold; }
+        .sec-box.purple { background: var(--purple); }
+        .sec-box.green { background: var(--green); }
+        .sec-box.green div, .sec-box.green span { color: #000; }
+        .sec-box.yellow { background: var(--yellow); }
+        .sec-box.yellow div, .sec-box.yellow span { color: #000; }
+        #mini{position:absolute;bottom:20px;right:20px;width:200px;height:200px;border:2px solid #333;background:rgba(0,0,0,0.8);z-index:10}
+        #cd{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:140px;color:#fff;display:none;z-index:20;font-style:italic;font-weight:bold}
+        #lapMsg{position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);font-size:48px;color:#fff;display:none;z-index:15;text-align:center;background:rgba(0,0,0,0.9);padding:30px 60px;border:2px solid var(--main);transform:skewX(-10deg);white-space:nowrap}
+        #mobile-controls { display: none; position: absolute; bottom: 40px; left: 40px; z-index: 100; flex-direction: column; align-items: center; gap: 20px; }
+        .m-row { display: flex; gap: 25px; }
+        .m-btn { width: 110px; height: 110px; background: rgba(0, 0, 0, 0.5); border: 3px solid var(--main); border-radius: 20px; color: var(--main); font-size: 45px; display: flex; justify-content: center; align-items: center; }
+        .m-btn:active { background: var(--main); color: #000; }
+        canvas{display:block}
+
+        /* 新增的 UI 样式 */
+        #auth-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .auth-box { border: 2px solid #00f0ff; padding: 40px; background: rgba(0,240,255,0.05); display: flex; flex-direction: column; gap: 15px; width: 350px; }
+        .auth-box input { background: #000; border: 1px solid #00f0ff; color: #fff; padding: 10px; font-family: monospace; }
+        #leaderboard-layer { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.95); z-index: 500; display: none; flex-direction: column; align-items: center; padding-top: 50px; }
+        .lb-table { width: 80%; border-collapse: collapse; margin-top: 20px; color: #fff; font-family: monospace; }
+        .lb-table th { border-bottom: 2px solid #00f0ff; padding: 10px; color: #00f0ff; text-align: left; }
+        .lb-table td { padding: 12px; border-bottom: 1px solid #222; cursor: pointer; }
+        #compare-layer { position: absolute; top: 15%; width: 500px; background: #050505; border: 2px solid #d000ff; padding: 20px; z-index: 600; display: none; box-shadow: 0 0 30px rgba(208,0,255,0.3); }
+        .comp-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; text-align: center; margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<!-- 1. 账号层 -->
+<div id="auth-screen">
+    <h1 style="color:#00f0ff; font-size:36px;">SYSTEM ACCESS</h1>
+    <div class="auth-box">
+        <input type="text" id="u-name" placeholder="USERNAME">
+        <input type="password" id="u-pass" placeholder="PASSWORD">
+        <button class="btn" onclick="handleAuth(false)">LOGIN</button>
+        <button class="btn" onclick="handleAuth(true)" style="border-color:#888; font-size:12px;">REGISTER</button>
+    </div>
+</div>
+
+<!-- 2. 原版游戏结构 [1] -->
+<div id="game">
+    <div id="menu" class="scr on">
+        <h1>ELECTRON<br>EXPRESSWAY</h1>
+        <div class="sub">Pro Online Edition</div>
+        <button class="btn" onclick="startGame()">🏁 START SESSION</button>
+        <button class="btn" onclick="show('settings')">⚙ VIEW PB / CAMERA</button>
+    </div>
+
+    <div id="settings" class="scr">
+        <h1 style="font-size:36px">SESSION INFO</h1>
+        <div style="margin:20px 0; color:#fff; text-align:center; border: 1px solid #333; padding: 20px;">
+            <p style="color:var(--main); margin-bottom:10px">PERSONAL BEST RECORDS:</p>
+            <div id="pb-display">Loading...</div>
+        </div>
+        <div class="row">
+            <label>CAMERA TYPE:</label>
+            <select id="camMode">
+                <option value="0">STANDARD (Fixed North)</option>
+                <option value="1">FOLLOW (Chase View)</option>
+            </select>
+        </div>
+        <!-- 排行榜按钮会被脚本插入到这里 -->
+        <button class="btn" onclick="saveSettings()" style="margin-top:20px">✓ BACK</button>
+    </div>
+
+    <div id="play" class="scr">
+        <canvas id="cv"></canvas>
+        <div id="hud">
+            <div>TIME: <span id="time">00:00.000</span></div>
+            <div>LAP: <span id="lap">0</span> / 1</div>
+            <div>SPEED: <span id="speed">0</span> km/h</div>
+            <div>BEST PB: <span id="best">--:--.---</span></div>
+        </div>
+        <div id="sectors-ui">
+            <div id="s1-box" class="sec-box"><span>SECTOR 1</span><div id="s1-time">--.--</div></div>
+            <div id="s2-box" class="sec-box"><span>SECTOR 2</span><div id="s2-time">--.--</div></div>
+            <div id="s3-box" class="sec-box"><span>SECTOR 3</span><div id="s3-time">--.--</div></div>
+        </div>
+        <canvas id="mini"></canvas>
+        <div id="cd">3</div>
+        <div id="lapMsg"></div>
+    </div>
+
+    <div id="end" class="scr">
+        <h1 style="font-size:42px">SESSION END</h1>
+        <div id="end-result" style="margin:30px 0;font-size:22px; text-align:center"></div>
+        <button class="btn" onclick="startGame()">🔄 TRY AGAIN</button>
+        <button class="btn" onclick="show('menu')">← MENU</button>
+    </div>
+
+    <!-- 3. 新增层 -->
+    <div id="leaderboard-layer">
+        <h1>WORLD RECORDS</h1>
+        <table class="lb-table"><tbody id="lb-body"></tbody></table>
+        <button class="btn" onclick="closeLB()">BACK</button>
+    </div>
+    <div id="compare-layer">
+        <h2 id="comp-title"></h2>
+        <div id="comp-content"></div>
+        <button class="btn" onclick="document.getElementById('compare-layer').style.display='none'">CLOSE</button>
+    </div>
+</div>
+
+<script>
+var cv=document.getElementById('cv'),c=cv.getContext('2d');
+var mi=document.getElementById('mini'),mc=mi.getContext('2d');
+cv.width=1000;cv.height=700;mi.width=200;mi.height=200;
+
+var cfg={laps:1, camMode:0}; 
+var track=[], trackSplits=[], tw=260; 
+var car={x:0,y:0,a:0,s:0,vx:0,vy:0};
+var cam={x:0,y:0,zoom:0.4}; 
+var keys={w:0,a:0,s:0,d:0};
+var g={
+    on:0,st:0,lt:0,lap:0, progress:0,lastProgress:0,
+    splitIndices: [], 
+    secStartTime: 0,
+    curSecTimes: [0,0,0],
+    pb: { lap: 1e9, s1: null, s2: null, s3: null },
+    currentSplitIdx: 0,
+    uiTimeouts: []
+};
+
+// 初始化：读取本地存档
+function loadPB() {
+    var saved = localStorage.getItem('hmcl_racing_pb');
+    if(saved) {
+        g.pb = JSON.parse(saved);
+    }
+    updateSettingsUI();
+}
+loadPB();
+
+function updateSettingsUI() {
+    var display = document.getElementById('pb-display');
+    if(g.pb.lap < 1e9) {
+        display.innerHTML = `LAP: ${fmt(g.pb.lap)}<br>S1: ${(g.pb.s1/1000).toFixed(2)} | S2: ${(g.pb.s2/1000).toFixed(2)} | S3: ${(g.pb.s3/1000).toFixed(2)}`;
+    } else {
+        display.textContent = "No records yet. Go set a lap!";
+    }
+    document.getElementById('best').textContent = g.pb.lap < 1e9 ? fmt(g.pb.lap) : '--:--.---';
+}
+
+function isMobile() { return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent); }
+function resize() {
+    var game = document.getElementById('game');
+    var ww = window.innerWidth, wh = window.innerHeight;
+    var ratio = Math.min(ww / 1000, wh / 700);
+    game.style.transform = 'scale(' + ratio + ')';
+}
+window.addEventListener('resize', resize);
+resize();
+
+if (isMobile()) {
+    document.getElementById('mobile-controls').style.display = 'flex';
+    var btns = document.querySelectorAll('.m-btn');
+    btns.forEach(function(btn) {
+        var k = btn.getAttribute('data-k');
+        btn.addEventListener('touchstart', function(e) { e.preventDefault(); keys[k] = 1; }, {passive: false});
+        btn.addEventListener('touchend', function(e) { e.preventDefault(); keys[k] = 0; }, {passive: false});
+    });
+}
+
+function makeTrack(){
+    var p=[]; var x=0, y=0, a=0; var splits = []; 
+    function addSeg(type, val1, val2, val3) {
+        if(type=='s'){ var st=Math.ceil(val1/50); for(var j=0;j<st;j++){ p.push({x:x,y:y,a:a}); x+=Math.cos(a)*50; y+=Math.sin(a)*50; }
+        }else{ var arc=val1*Math.abs(val2); var st=Math.ceil(arc/40); var da=val2/st*val3; for(var j=0;j<st;j++){ p.push({x:x,y:y,a:a}); a+=da; x+=Math.cos(a)*40; y+=Math.sin(a)*40; } }
+    }
+    addSeg('s', 2500); addSeg('c', 600, Math.PI*0.6, -1); addSeg('s', 400); addSeg('c', 400, Math.PI*0.4, -1); addSeg('s', 600); addSeg('c', 400, Math.PI*0.3, 1); addSeg('s', 800);
+    splits.push(p.length); // S1
+    addSeg('c', 500, Math.PI*0.4, -1); addSeg('s', 1500); addSeg('c', 400, Math.PI*1.05, 1); addSeg('s', 600); addSeg('c', 400, Math.PI*0.9, -1); addSeg('s', 1200); addSeg('c', 500, Math.PI*0.3, 1); addSeg('s', 800);
+    splits.push(p.length); // S2
+    addSeg('c', 600, Math.PI*0.5, -1); addSeg('s', 3000); addSeg('c', 700, Math.PI*0.5, -1); addSeg('s', 5500); addSeg('c', 700, Math.PI*0.5, -1);
+    var sx=0,sy=0; var lp=p[p.length-1]; var dist=Math.hypot(sx-lp.x,sy-lp.y); var cls=Math.ceil(dist/50);
+    for(var i=1;i<=cls;i++){ var t=i/cls; var t2=t*t*(3-2*t); p.push({x:lp.x+(sx-lp.x)*t2, y:lp.y+(sy-lp.y)*t2, a:a+(0-a)*t}); }
+    g.splitIndices = splits; return p;
+}
+
+document.onkeydown=function(e){ var k=e.key.toLowerCase(); if(k=='w'||k=='arrowup')keys.w=1; if(k=='a'||k=='arrowleft')keys.a=1; if(k=='s'||k=='arrowdown')keys.s=1; if(k=='d'||k=='arrowright')keys.d=1; };
+document.onkeyup=function(e){ var k=e.key.toLowerCase(); if(k=='w'||k=='arrowup')keys.w=0; if(k=='a'||k=='arrowleft')keys.a=0; if(k=='s'||k=='arrowdown')keys.s=0; if(k=='d'||k=='arrowright')keys.d=0; };
+
+function show(id){
+    var all=document.querySelectorAll('.scr');
+    for(var i=0;i<all.length;i++)all[i].classList.remove('on');
+    document.getElementById(id).classList.add('on');
+}
+
+function saveSettings(){
+    cfg.camMode = parseInt(document.getElementById('camMode').value);
+    show('menu');
+}
+
+function startGame(){
+    if(isMobile()) {
+        try { document.documentElement.requestFullscreen(); } catch(e) {}
+    }
+    show('play');
+    track=makeTrack();
+    var stIdx = 5; var st=track[stIdx], nx=track[stIdx+5];
+    car={x:st.x, y:st.y, a:Math.atan2(nx.y-st.y,nx.x-st.x), s:0, vx:0, vy:0};
+    cam={x:car.x, y:car.y, zoom:0.4};
+    g.on=0; g.lap=0; g.progress=0; g.lastProgress=0; g.curSecTimes=[0,0,0]; g.currentSplitIdx=0;
+    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts = [];
+    resetSectorUI();
+    document.getElementById('lap').textContent='0';
+    document.getElementById('lapMsg').style.display='none';
+    countdown();
+}
+
+function resetSectorUI() {
+    for(var i=1; i<=3; i++) {
+        var el = document.getElementById('s'+i+'-box');
+        var tm = document.getElementById('s'+i+'-time');
+        el.className = 'sec-box'; tm.textContent = '--.--';
+    }
+}
+
+function countdown(){
+    var el=document.getElementById('cd'); el.style.display='block';
+    var n=3; el.textContent=n;
+    var iv=setInterval(function(){
+        n--; if(n>0)el.textContent=n;
+        else if(n==0){el.textContent='GO!';el.style.color='#0f0';}
+        else{ clearInterval(iv); el.style.display='none'; g.on=1; g.st=Date.now(); g.lt=Date.now(); g.secStartTime = Date.now(); loop(); }
+    },800);
+}
+
+function loop(){ if(!g.on)return; update(); draw(); requestAnimationFrame(loop); }
+
+function update(){
+    var ms=18; var ac=0.25; var br=0.4; var tr=0.06; var fr=0.01; var dr=0.96; 
+    if(keys.w)car.s=Math.min(car.s+ac,ms);
+    if(keys.s)car.s=Math.max(car.s-br,-ms*0.3);
+    if(!keys.w&&!keys.s){ if(car.s>0)car.s=Math.max(0,car.s-fr); else car.s=Math.min(0,car.s+fr); }
+    var sr=Math.abs(car.s)/ms; var tf=0.4+sr*0.6;
+    if(keys.a)car.a-=tr*tf; if(keys.d)car.a+=tr*tf;
+    var tx=Math.cos(car.a)*car.s,ty=Math.sin(car.a)*car.s;
+    car.vx=car.vx*dr+tx*(1-dr); car.vy=car.vy*dr+ty*(1-dr);
+    car.x+=car.vx; car.y+=car.vy;
+    
+    var md=1e9,ni=0,np=null;
+    var startIdx = Math.floor(g.progress * track.length);
+    for(var j=-250; j<250; j++){
+        var idx = (startIdx + j + track.length) % track.length;
+        var pt=track[idx],d=Math.hypot(car.x-pt.x,car.y-pt.y);
+        if(d<md){md=d;ni=idx;np=pt;}
+    }
+    if(md>tw){ car.s*=0.85; car.x+=(np.x-car.x)*0.2; car.y+=(np.y-car.y)*0.2; }
+    
+    g.lastProgress=g.progress; g.progress=ni/track.length;
+    var curIdx = ni, prevIdx = Math.floor(g.lastProgress * track.length);
+    
+    for(var i=0; i<2; i++) {
+        var sp = g.splitIndices[i];
+        if(g.currentSplitIdx == i && curIdx >= sp && prevIdx < sp) recordSector(i);
+    }
+    
+    if(g.lastProgress>0.9 && g.progress<0.1){
+        var lapTime=Date.now()-g.lt;
+        recordSector(2); // S3
+        g.lap++;
+        document.getElementById('lap').textContent=g.lap;
+        showLapTime(g.lap, lapTime);
+        
+        if(lapTime < g.pb.lap) {
+            g.pb = { lap: lapTime, s1: g.curSecTimes[0], s2: g.curSecTimes[1], s3: g.curSecTimes[2] };
+            localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
+            updateSettingsUI();
+        }
+        setTimeout(endGame, 2000);
+    }
+    
+    cam.x+=(car.x-cam.x)*0.1; cam.y+=(car.y-cam.y)*0.1;
+    document.getElementById('time').textContent=fmt(Date.now()-g.st);
+    document.getElementById('speed').textContent=Math.round(Math.hypot(car.vx,car.vy)*25);
+}
+
+function recordSector(secIdx) {
+    var now = Date.now();
+    var secTime = now - g.secStartTime;
+    g.curSecTimes[secIdx] = secTime;
+    g.secStartTime = now;
+    g.currentSplitIdx = secIdx + 1;
+    updateSectorUI(secIdx, secTime);
+}
+
+function updateSectorUI(secIdx, time) {
+    var elBox = document.getElementById('s'+(secIdx+1)+'-box');
+    var elTime = document.getElementById('s'+(secIdx+1)+'-time');
+    elTime.textContent = (time/1000).toFixed(2);
+    var pbSec = (secIdx==0?g.pb.s1:(secIdx==1?g.pb.s2:g.pb.s3));
+    
+    elBox.className = 'sec-box';
+    if(pbSec) {
+        if(time < pbSec) elBox.classList.add('purple');
+        else elBox.classList.add('yellow');
+        var diff = time - pbSec;
+        var diffStr = (diff > 0 ? '+' : '-') + (Math.abs(diff)/1000).toFixed(2);
+        var t = setTimeout(function() { elTime.textContent = diffStr; }, 1500);
+        g.uiTimeouts.push(t);
+    } else {
+        elBox.classList.add('green'); 
+    }
+}
+
+function showLapTime(lapNum,time){
+    var el=document.getElementById('lapMsg');
+    el.innerHTML='FINISH!<br>'+(time/1000).toFixed(3)+'s';
+    el.style.display='block';
+}
+
+function draw(){
+    c.fillStyle='#000'; c.fillRect(0,0,1000,700);
+    c.save();
+    c.translate(500, 350); 
+    
+    if(cfg.camMode === 1) {
+        c.rotate(-car.a - Math.PI/2); 
+        c.scale(cam.zoom, cam.zoom);
+        c.translate(-car.x, -car.y);
+    } else {
+        c.scale(cam.zoom, cam.zoom);
+        c.translate(-cam.x, -cam.y);
+    }
+    
+    c.strokeStyle='#fff'; c.lineWidth=(tw+15)*2; c.lineCap='round'; c.lineJoin='round';
+    c.beginPath(); track.forEach((p,i)=>i==0?c.moveTo(p.x,p.y):c.lineTo(p.x,p.y)); c.closePath(); c.stroke();
+    c.strokeStyle='#222'; c.lineWidth=tw*2; c.stroke();
+    c.strokeStyle='#444'; c.lineWidth=4; c.setLineDash([80,80]); c.stroke(); c.setLineDash([]);
+    
+    g.splitIndices.forEach(idx => {
+        var sp=track[idx], pr=track[idx-1];
+        c.save(); c.translate(sp.x, sp.y); c.rotate(Math.atan2(sp.y-pr.y, sp.x-pr.x));
+        c.fillStyle='rgba(255,255,0,0.5)'; c.fillRect(-5,-tw,10,tw*2); c.restore();
+    });
+
+    var s0=track[0], s1=track[1];
+    c.save(); c.translate(s0.x, s0.y); c.rotate(Math.atan2(s1.y-s0.y, s1.x-s0.x));
+    c.fillStyle='#fff'; c.fillRect(0, -tw, 200, tw*2);
+    c.fillStyle='#000'; for(var r=0;r<12;r++)for(var cl=0;cl<5;cl++)if((r+cl)%2==0)c.fillRect(cl*40, -tw+r*44, 40, 44);
+    c.restore();
+    
+    c.save(); c.translate(car.x,car.y); c.rotate(car.a);
+    c.shadowColor='#00f0ff'; c.shadowBlur=20; c.fillStyle='#00f0ff';
+    c.beginPath(); c.moveTo(50,0); c.lineTo(-30,25); c.lineTo(-30,-25); c.fill();
+    c.fillStyle='#000'; c.fillRect(-20,-10,20,20); 
+    c.restore(); c.restore();
+    
+    drawMiniMap();
+}
+
+function drawMiniMap(){
+    mc.fillStyle='rgba(0,0,0,0.8)'; mc.fillRect(0,0,200,200);
+    var mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+    track.forEach(p=>{ mnx=Math.min(mnx,p.x); mxx=Math.max(mxx,p.x); mny=Math.min(mny,p.y); mxy=Math.max(mxy,p.y); });
+    var sc=160/Math.max(mxx-mnx, mxy-mny);
+    mc.strokeStyle='#555'; mc.lineWidth=4; mc.beginPath();
+    track.forEach((p,i)=>i==0?mc.moveTo((p.x-mnx)*sc+20,(p.y-mny)*sc+20):mc.lineTo((p.x-mnx)*sc+20,(p.y-mny)*sc+20));
+    mc.stroke();
+    var cx=(car.x-mnx)*sc+20, cy=(car.y-mny)*sc+20;
+    mc.fillStyle='#00f0ff'; mc.beginPath(); mc.arc(cx,cy,4,0,Math.PI*2); mc.fill();
+}
+
+function endGame(){
+    g.on=0;
+    var lt = Date.now()-g.lt;
+    var res = document.getElementById('end-result');
+    res.innerHTML = `TIME: ${fmt(lt)}`;
+    if(lt <= g.pb.lap) res.innerHTML += `<br><span style="color:var(--purple)">NEW PERSONAL BEST!</span>`;
+    show('end');
+}
+
+function fmt(ms){
+    var m=Math.floor(ms/60000); var s=Math.floor(ms%60000/1000); var l=ms%1000;
+    return (m<10?'0':'')+m+':'+(s<10?'0':'')+s+'.'+(l<100?'0':'')+(l<10?'0':'')+l;
+}
+// 修复排行榜返回按钮卡死
+function closeLB() {
+    const lb = document.getElementById('leaderboard-layer');
+    if (lb) {
+        lb.style.display = 'none';
+    }
+}
+</script>
+
+<script>
+    // 这里放联网和账号逻辑
+    const socket = io();
+    let currentUser = null;
+
+    function handleAuth(isReg) {
+        const user = document.getElementById('u-name').value;
+        const pass = document.getElementById('u-pass').value;
+        socket.emit('auth', { user, pass, isReg });
+    }
+
+    socket.on('authRes', (res) => {
+        if(res.ok) {
+            currentUser = res.user;
+            localStorage.setItem('hmcl_racing_pb', JSON.stringify(res.pb));
+            document.getElementById('auth-screen').style.display = 'none';
+            // 此时调用 loadPB 不会报错，因为 g 已经在上面的原版脚本中初始化了
+            if(typeof loadPB === 'function') loadPB(); 
+        } else { alert(res.msg); }
+    });
+
+    // 自动拦截成绩更新发送到服务器
+    const oldSet = localStorage.setItem;
+    localStorage.setItem = function(k, v) {
+        if(k === 'hmcl_racing_pb' && currentUser) {
+            socket.emit('submitPB', { user: currentUser, pb: JSON.parse(v) });
+        }
+        oldSet.apply(this, arguments);
+    };
+    
+    // 插入排行榜按钮到设置页
+    window.addEventListener('load', () => {
+        const s = document.getElementById('settings');
+        const b = document.createElement('button');
+        b.className='btn'; b.style.color='#d000ff'; b.innerHTML='🏆 LEADERBOARD';
+        b.onclick = () => { document.getElementById('leaderboard-layer').style.display='flex'; socket.emit('getLeaderboard'); };
+        s.insertBefore(b, s.lastElementChild);
+    });
+
+    socket.on('leaderboardUpdate', (data) => {
+        const b = document.getElementById('lb-body');
+        b.innerHTML = '<tr><th>RANK</th><th>PILOT</th><th>TIME</th></tr>';
+        data.forEach((r, i) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>#${i+1}</td><td>${r.name}</td><td>${fmt(r.pb.lap)}</td>`;
+            tr.onclick = () => { /* 对比逻辑 */ };
+            b.appendChild(tr);
+        });
+    });
+</script>
+</body>
+</html>
