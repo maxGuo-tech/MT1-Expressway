@@ -6,7 +6,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // 1. 连接到你的远程数据库（把下面的地址换成你申请到的）
-mongoose.connect('mongodb+srv://admin:123456@cluster0.imulmww.mongodb.net/?appName=Cluster0');
+mongoose.connect('mongodb+srv://admin:Guo10160308@cluster0.imulmww.mongodb.net/?appName=Cluster0');
 
 // 2. 定义排行榜的数据结构
 const LeaderboardSchema = new mongoose.Schema({
@@ -43,4 +43,5 @@ app.post('/api/leaderboard', async (req, res) => {
 });
 
 app.listen(3000, () => console.log('Server running with MongoDB!'));
+
 
