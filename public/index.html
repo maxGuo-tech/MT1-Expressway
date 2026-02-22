@@ -132,6 +132,7 @@
 </div>
 
 <script>
+var lastTime = 0; 
 var cv=document.getElementById('cv'),c=cv.getContext('2d');
 var mi=document.getElementById('mini'),mc=mi.getContext('2d');
 cv.width=1000;cv.height=700;mi.width=200;mi.height=200;
@@ -250,18 +251,26 @@ function countdown(){
     var el=document.getElementById('cd'); el.style.display='block';
     var n=3; el.textContent=n;
     var iv=setInterval(function(){
-        n--; if(n>0)el.textContent=n;
-        else if(n==0){el.textContent='GO!';el.style.color='#0f0';}
-        else{ 
+        n--; 
+        if(n > 0) {
+            el.textContent = n;
+        } else if(n == 0) {
+            el.textContent = 'GO!';
+            el.style.color = '#0f0';
+        } else { 
+            // 比赛正式开始的逻辑
             clearInterval(iv); 
-            el.style.display='none'; 
-            g.on=1; 
-            g.st=Date.now(); 
-            g.lt=Date.now(); 
+            el.style.display = 'none'; 
+            g.on = 1; 
+            g.st = Date.now(); 
+            g.lt = Date.now(); 
             g.secStartTime = Date.now(); 
-            lastTime = performance.now(); // 新增：初始化计时器
-            requestAnimationFrame(loop);   // 修改：使用系统帧率回调启动
-}
+            
+            // 下面这两行是关键修复
+            lastTime = performance.now(); 
+            requestAnimationFrame(loop); 
+        }
+    }, 800); // <--- 检查这里，必须有这个闭合括号和分号
 }
 
 var lastTime = 0; // 新增：用于记录上一帧的时间
@@ -269,13 +278,12 @@ var lastTime = 0; // 新增：用于记录上一帧的时间
 function loop(now){ 
     if(!g.on) return; 
     
-    // 计算时间增量，以 60FPS (约16.67ms) 为基准 1.0
     if(!lastTime) lastTime = now;
     var dt = (now - lastTime) / 16.667; 
-    if(dt > 2) dt = 2; // 防止切屏回来后的瞬间瞬移
+    if(dt > 2) dt = 2; 
     lastTime = now;
 
-    update(dt); // 传入 dt
+    update(dt); 
     draw(); 
     requestAnimationFrame(loop); 
 }
