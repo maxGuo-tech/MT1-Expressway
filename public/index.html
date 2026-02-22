@@ -135,6 +135,10 @@
 </div>
 
 <script>
+// 确保前面的 CDN 链接已经加上了
+var socket = io("https://mt1-expressway.onrender.com", {
+    transports: ['websocket', 'polling'] // 强制尝试多种连接方式
+});
 var cv=document.getElementById('cv'),c=cv.getContext('2d');
 var mi=document.getElementById('mini'),mc=mi.getContext('2d');
 cv.width=1000;cv.height=700;mi.width=200;mi.height=200;
