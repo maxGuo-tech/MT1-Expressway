@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const mongoose = require('mongoose'); // 必须加这一行！
 
 const app = express();
 const server = http.createServer(app);
@@ -60,6 +61,7 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`服务器运行在端口 ${PORT}`);
 });
+
 
 
 
