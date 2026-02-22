@@ -1,41 +1,56 @@
 const express = require('express');
-const app = express();
-const http = require('http').Server(app);
-const io = require('socket.io')(http);
+const fs = require('fs');
 const path = require('path');
+const app = express();
 
-app.use(express.static('public')); // ÓÎÏ·ÎÄ¼ş·ÅÔÚ public ÎÄ¼ş¼ĞÀï
+app.use(express.json());
+// å‡è®¾ä½ çš„å‰ç«¯ HTML æ”¾åœ¨ /app/public ç›®å½•ä¸‹
+app.use(express.static('/app/public'));
 
-let users = {}; // Ä£ÄâÊı¾İ¿â´æÓÃ»§ĞÅÏ¢ { username: { pass, pb } }
+// å­˜å‚¨æ’è¡Œæ¦œæ•°æ®çš„æ–‡ä»¶è·¯å¾„
+const DB_PATH = '/app/data/leaderboard.json';
+let leaderboard = [];
 
-io.on('connection', (socket) => {
-    // ´¦ÀíµÇÂ¼/×¢²á
-    socket.on('auth', (data) => {
-        if (data.isReg) {
-            if (users[data.user]) return socket.emit('authRes', { ok: false, msg: "ÓÃ»§ÃûÒÑ´æÔÚ" });
-            users[data.user] = { pass: data.pass, pb: { lap: 1e9, s1:0, s2:0, s3:0 } };
-            socket.emit('authRes', { ok: true, user: data.user, pb: users[data.user].pb });
-        } else {
-            let u = users[data.user];
-            if (u && u.pass === data.pass) socket.emit('authRes', { ok: true, user: data.user, pb: u.pb });
-            else socket.emit('authRes', { ok: false, msg: "ÃÜÂë´íÎó»òÓÃ»§²»´æÔÚ" });
-        }
-    });
+// å¯åŠ¨æ—¶è¯»å–ç°æœ‰çš„æ’è¡Œæ¦œ
+if (fs.existsSync(DB_PATH)) {
+    leaderboard = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+} else {
+    // ç¡®ä¿ç›®å½•å­˜åœ¨
+    fs.mkdirSync('/app/data', { recursive: true });
+}
 
-    // Ìá½»ĞÂ¼ÍÂ¼
-    socket.on('submitPB', (data) => {
-        if (users[data.user]) {
-            users[data.user].pb = data.pb;
-        }
-    });
-
-    // »ñÈ¡ÅÅĞĞ°ñ
-    socket.on('getLeaderboard', () => {
-        let lb = Object.keys(users).map(name => ({ name, pb: users[name].pb }))
-                 .filter(u => u.pb.lap < 1e9)
-                 .sort((a, b) => a.pb.lap - b.pb.lap).slice(0, 10);
-        socket.emit('leaderboardUpdate', lb);
-    });
+// æ¥å£ï¼šè·å–å…¨å±€æ’è¡Œæ¦œ
+app.get('/api/leaderboard', (req, res) => {
+    res.json(leaderboard);
 });
 
-http.listen(3000, () => console.log('ÍøÕ¾ÒÑÆô¶¯: http://localhost:3000'));
+// æ¥å£ï¼šä¸Šä¼ æ–°æˆç»© (PB)
+app.post('/api/leaderboard', (req, res) => {
+    const { name, lap, s1, s2, s3 } = req.body;
+    
+    if (!name || !lap) return res.status(400).send('Invalid data');
+
+    // æ£€æŸ¥ç©å®¶æ˜¯å¦å·²ç»åœ¨æ¦œå•ä¸Š
+    const existingIndex = leaderboard.findIndex(p => p.name === name);
+    if (existingIndex !== -1) {
+        // å¦‚æœæ–°æˆç»©æ›´å¥½ï¼Œåˆ™æ›´æ–°
+        if (lap < leaderboard[existingIndex].lap) {
+            leaderboard[existingIndex] = { name, lap, s1, s2, s3 };
+        }
+    } else {
+        // æ–°ç©å®¶ï¼Œç›´æ¥åŠ å…¥
+        leaderboard.push({ name, lap, s1, s2, s3 });
+    }
+
+    // æŒ‰åœˆé€Ÿæ—¶é—´ä»å°åˆ°å¤§æ’åº (è·‘å¾—è¶Šå¿«è¶Šé å‰)
+    leaderboard.sort((a, b) => a.lap - b.lap);
+    // åªä¿ç•™å‰ 50 å
+    leaderboard = leaderboard.slice(0, 50);
+
+    // æŒä¹…åŒ–ä¿å­˜åˆ°æ–‡ä»¶
+    fs.writeFileSync(DB_PATH, JSON.stringify(leaderboard));
+    
+    res.send({ success: true });
+});
+
+app.listen(3000, () => console.log('Server running on port 3000'));
