@@ -1,13 +1,28 @@
 const express = require('express');
-const mongoose = require('mongoose'); // 引入数据库插件
+const http = require('http');
+const { Server } = require('socket.io');
+
 const app = express();
+const server = http.createServer(app);
 
 app.use(express.json());
 app.use(express.static('public'));
-
+io.on('connection', (socket) => {
+    console.log('有玩家连接了:', socket.id);
+    
+    socket.on('login', (data) => {
+        console.log('玩家登录:', data.username);
+        // 这里写你的 MongoDB 查询逻辑
+    });
+});
 // 1. 连接到你的远程数据库（把下面的地址换成你申请到的）
 mongoose.connect('mongodb+srv://admin:Guo10160308@cluster0.imulmww.mongodb.net/?appName=Cluster0');
-
+const io = new Server(server, {
+    cors: {
+        origin: "*", // 允许所有来源，方便调试
+        methods: ["GET", "POST"]
+    }
+});
 // 2. 定义排行榜的数据结构
 const LeaderboardSchema = new mongoose.Schema({
     name: String,
@@ -41,7 +56,10 @@ app.post('/api/leaderboard', async (req, res) => {
     }
     res.send({ success: true });
 });
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`服务器运行在端口 ${PORT}`);
+});
 
-app.listen(3000, () => console.log('Server running with MongoDB!'));
 
 
