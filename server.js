@@ -1,68 +1,79 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const mongoose = require('mongoose'); // 必须加这一行！
+const mongoose = require('mongoose');
 
 const app = express();
 const server = http.createServer(app);
 
+// 初始化 Socket.io 并解决跨域
 const io = new Server(server, {
     cors: {
-        origin: "*", 
+        origin: "*",
         methods: ["GET", "POST"]
     }
 });
+
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static('public')); // 确保你的 HTML 文件在 public 文件夹里
+
 io.on('connection', (socket) => {
-    console.log('有玩家连接了:', socket.id);
+    console.log('有玩家连接:', socket.id);
     
     socket.on('login', (data) => {
         console.log('玩家登录:', data.username);
-        // 这里写你的 MongoDB 查询逻辑
     });
 });
-// 1. 连接到你的远程数据库（把下面的地址换成你申请到的）
-mongoose.connect('mongodb+srv://admin:Guo10160308@cluster0.imulmww.mongodb.net/?appName=Cluster0');
-// 2. 定义排行榜的数据结构
+
+// 连接 MongoDB
+mongoose.connect('mongodb+srv://admin:Guo10160308@cluster0.imulmww.mongodb.net/?appName=Cluster0')
+    .then(() => console.log('MongoDB 连接成功'))
+    .catch(err => console.error('MongoDB 连接失败:', err));
+
+// 定义排行榜模型
 const LeaderboardSchema = new mongoose.Schema({
     name: String,
     lap: Number,
-    s1: Number, s2: Number, s3: Number,
+    s1: Number,
+    s2: Number,
+    s3: Number,
     date: { type: Date, default: Date.now }
 });
 const Record = mongoose.model('Record', LeaderboardSchema);
 
-// 3. 获取排行榜 API
+// 获取排行榜接口
 app.get('/api/leaderboard', async (req, res) => {
-    // 从数据库查前 50 名，按时间从小到大排
-    const data = await Record.find().sort({ lap: 1 }).limit(50);
-    res.json(data);
+    try {
+        const data = await Record.find().sort({ lap: 1 }).limit(50);
+        res.json(data);
+    } catch (err) {
+        res.status(500).send(err);
+    }
 });
 
-// 4. 提交成绩 API
+// 提交成绩接口
 app.post('/api/leaderboard', async (req, res) => {
     const { name, lap, s1, s2, s3 } = req.body;
-    
-    // 查找该玩家是否已有记录
-    const existing = await Record.findOne({ name });
-    if (existing) {
-        if (lap < existing.lap) { // 如果新成绩更好，就更新
-            existing.lap = lap;
-            existing.s1 = s1; existing.s2 = s2; existing.s3 = s3;
-            await existing.save();
+    try {
+        let existing = await Record.findOne({ name });
+        if (existing) {
+            if (lap < existing.lap) {
+                existing.lap = lap;
+                existing.s1 = s1;
+                existing.s2 = s2;
+                existing.s3 = s3;
+                await existing.save();
+            }
+        } else {
+            await Record.create({ name, lap, s1, s2, s3 });
         }
-    } else {
-        await Record.create({ name, lap, s1, s2, s3 });
+        res.send({ success: true });
+    } catch (err) {
+        res.status(500).send(err);
     }
-    res.send({ success: true });
 });
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`服务器运行在端口 ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
-
-
-
-
-
