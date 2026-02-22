@@ -252,23 +252,62 @@ function countdown(){
     var iv=setInterval(function(){
         n--; if(n>0)el.textContent=n;
         else if(n==0){el.textContent='GO!';el.style.color='#0f0';}
-        else{ clearInterval(iv); el.style.display='none'; g.on=1; g.st=Date.now(); g.lt=Date.now(); g.secStartTime = Date.now(); loop(); }
-    },800);
+        else{ 
+            clearInterval(iv); 
+            el.style.display='none'; 
+            g.on=1; 
+            g.st=Date.now(); 
+            g.lt=Date.now(); 
+            g.secStartTime = Date.now(); 
+            lastTime = performance.now(); // 新增：初始化计时器
+            requestAnimationFrame(loop);   // 修改：使用系统帧率回调启动
+}
 }
 
-function loop(){ if(!g.on)return; update(); draw(); requestAnimationFrame(loop); }
+var lastTime = 0; // 新增：用于记录上一帧的时间
 
-function update(){
-    var ms=18; var ac=0.25; var br=0.4; var tr=0.06; var fr=0.01; var dr=0.96; 
-    if(keys.w)car.s=Math.min(car.s+ac,ms);
-    if(keys.s)car.s=Math.max(car.s-br,-ms*0.3);
-    if(!keys.w&&!keys.s){ if(car.s>0)car.s=Math.max(0,car.s-fr); else car.s=Math.min(0,car.s+fr); }
-    var sr=Math.abs(car.s)/ms; var tf=0.4+sr*0.6;
-    if(keys.a)car.a-=tr*tf; if(keys.d)car.a+=tr*tf;
-    var tx=Math.cos(car.a)*car.s,ty=Math.sin(car.a)*car.s;
-    car.vx=car.vx*dr+tx*(1-dr); car.vy=car.vy*dr+ty*(1-dr);
-    car.x+=car.vx; car.y+=car.vy;
+function loop(now){ 
+    if(!g.on) return; 
     
+    // 计算时间增量，以 60FPS (约16.67ms) 为基准 1.0
+    if(!lastTime) lastTime = now;
+    var dt = (now - lastTime) / 16.667; 
+    if(dt > 2) dt = 2; // 防止切屏回来后的瞬间瞬移
+    lastTime = now;
+
+    update(dt); // 传入 dt
+    draw(); 
+    requestAnimationFrame(loop); 
+}
+
+function update(dt){
+    var ms=18; var ac=0.25; var br=0.4; var tr=0.06; var fr=0.01; var dr=0.96; 
+    
+    // 所有涉及速度增减、转向、位置移动的计算都要乘以 dt
+    if(keys.w) car.s = Math.min(car.s + ac * dt, ms);
+    if(keys.s) car.s = Math.max(car.s - br * dt, -ms * 0.3);
+    
+    if(!keys.w && !keys.s){ 
+        if(car.s > 0) car.s = Math.max(0, car.s - fr * dt); 
+        else car.s = Math.min(0, car.s + fr * dt); 
+    }
+    
+    var sr = Math.abs(car.s) / ms; 
+    var tf = 0.4 + sr * 0.6;
+    if(keys.a) car.a -= tr * tf * dt; 
+    if(keys.d) car.a += tr * tf * dt;
+    
+    var tx = Math.cos(car.a) * car.s, ty = Math.sin(car.a) * car.s;
+    
+    // 阻力/惯性平滑处理也需要考虑 dt
+    var dragFactor = Math.pow(dr, dt); 
+    car.vx = car.vx * dragFactor + tx * (1 - dragFactor); 
+    car.vy = car.vy * dragFactor + ty * (1 - dragFactor);
+    
+    car.x += car.vx * dt; 
+    car.y += car.vy * dt;
+    
+    // 后面关于轨道检测（md > tw）的部分逻辑保持不变，但移动补正需乘以 dt
     var md=1e9,ni=0,np=null;
     var startIdx = Math.floor(g.progress * track.length);
     for(var j=-250; j<250; j++){
@@ -276,11 +315,15 @@ function update(){
         var pt=track[idx],d=Math.hypot(car.x-pt.x,car.y-pt.y);
         if(d<md){md=d;ni=idx;np=pt;}
     }
-    if(md>tw){ car.s*=0.85; car.x+=(np.x-car.x)*0.2; car.y+=(np.y-car.y)*0.2; }
+    if(md>tw){ 
+        car.s *= Math.pow(0.85, dt); 
+        car.x += (np.x - car.x) * 0.2 * dt; 
+        car.y += (np.y - car.y) * 0.2 * dt; 
+    }
     
+    // 进度和计时逻辑保持不变
     g.lastProgress=g.progress; g.progress=ni/track.length;
     var curIdx = ni, prevIdx = Math.floor(g.lastProgress * track.length);
-    
     for(var i=0; i<2; i++) {
         var sp = g.splitIndices[i];
         if(g.currentSplitIdx == i && curIdx >= sp && prevIdx < sp) recordSector(i);
@@ -288,11 +331,10 @@ function update(){
     
     if(g.lastProgress>0.9 && g.progress<0.1){
         var lapTime=Date.now()-g.lt;
-        recordSector(2); // S3
+        recordSector(2);
         g.lap++;
         document.getElementById('lap').textContent=g.lap;
         showLapTime(g.lap, lapTime);
-        
         if(lapTime < g.pb.lap) {
             g.pb = { lap: lapTime, s1: g.curSecTimes[0], s2: g.curSecTimes[1], s3: g.curSecTimes[2] };
             localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
@@ -301,7 +343,8 @@ function update(){
         setTimeout(endGame, 2000);
     }
     
-    cam.x+=(car.x-cam.x)*0.1; cam.y+=(car.y-cam.y)*0.1;
+    cam.x += (car.x - cam.x) * 0.1 * dt; 
+    cam.y += (car.y - cam.y) * 0.1 * dt;
     document.getElementById('time').textContent=fmt(Date.now()-g.st);
     document.getElementById('speed').textContent=Math.round(Math.hypot(car.vx,car.vy)*25);
 }
