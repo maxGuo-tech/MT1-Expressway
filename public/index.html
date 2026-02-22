@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>HMCL Racing - Pro Online Edition</title>
     <!-- 引入 Socket.io -->
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         /* 这里包含你提供的所有原版 CSS [1] */
         *{margin:0;padding:0;box-sizing:border-box;touch-action:none;user-select:none;-webkit-user-select:none;}
@@ -71,10 +71,13 @@
 <div id="game">
     <div id="menu" class="scr on">
         <h1>ELECTRON<br>EXPRESSWAY</h1>
-        <div class="sub">Pro Online Edition</div>
+        <div class="sub">Single-person Demo</div>
+        <!-- 添加这两个按钮 -->
+        <button class="btn" onclick="handleAuth('login')">🔑 LOGIN / SYNC</button> 
         <button class="btn" onclick="startGame()">🏁 START SESSION</button>
-        <button class="btn" onclick="showSettings()">⚙ VIEW PB / CAMERA</button>
+        <button class="btn" onclick="show('settings')">⚙ VIEW PB / CAMERA</button>
     </div>
+</div>
 
     <div id="settings" class="scr">
         <h1 style="font-size:36px">SESSION INFO</h1>
@@ -132,6 +135,21 @@
 </div>
 
 <script>
+var cv=document.getElementById('cv'),c=cv.getContext('2d');
+var mi=document.getElementById('mini'),mc=mi.getContext('2d');
+cv.width=1000;cv.height=700;mi.width=200;mi.height=200;
+
+// --- 在这里添加初始化代码 ---
+// 注意：把引号里的地址换成你真实的 Render 后端地址
+var socket = io("https://mt1-expressway.onrender.com"); 
+
+socket.on("connect", () => {
+    console.log("已成功连接到服务器！ID:", socket.id);
+});
+// -----------------------
+
+var cfg={laps:1, camMode:0}; 
+var socket = io("https://mt1-expressway.onrender.com");
 var playerName = localStorage.getItem('hmcl_playerName');
 if(!playerName) {
     playerName = prompt("请输入你的车手ID用于排行榜：") || "Guest" + Math.floor(Math.random()*1000);
@@ -235,6 +253,27 @@ function makeTrack(){
 document.onkeydown=function(e){ var k=e.key.toLowerCase(); if(k=='w'||k=='arrowup')keys.w=1; if(k=='a'||k=='arrowleft')keys.a=1; if(k=='s'||k=='arrowdown')keys.s=1; if(k=='d'||k=='arrowright')keys.d=1; };
 document.onkeyup=function(e){ var k=e.key.toLowerCase(); if(k=='w'||k=='arrowup')keys.w=0; if(k=='a'||k=='arrowleft')keys.a=0; if(k=='s'||k=='arrowdown')keys.s=0; if(k=='d'||k=='arrowright')keys.d=0; };
 
+    // 处理登录/注册逻辑
+function handleAuth(mode) {
+    const username = prompt("请输入你的赛车手代号:");
+    if (!username) return;
+
+    // 向后端发送登录请求
+    socket.emit("login", { 
+        username: username, 
+        mode: mode 
+    });
+}
+
+// 监听后端返回的登录结果
+socket.on("auth_success", (data) => {
+    alert("欢迎回来, " + data.username + "！你的记录已同步。");
+    // 这里可以把后端传回来的 PB 覆盖掉本地的
+    if(data.pb) {
+        g.pb = data.pb;
+        updateSettingsUI();
+    }
+});
 function show(id){
     var all=document.querySelectorAll('.scr');
     for(var i=0;i<all.length;i++)all[i].classList.remove('on');
