@@ -437,7 +437,6 @@ function update(dt){
                 loadLeaderboard();
             });
         }
-        }
         setTimeout(endGame, 2000);
     }
     
@@ -557,7 +556,7 @@ function closeLB() {
 
 <script>
     // 这里放联网和账号逻辑
-    const socket = io();
+    const socket = io("https://mt1-expressway.onrender.com");
     let currentUser = null;
 
     function handleAuth(isReg) {
