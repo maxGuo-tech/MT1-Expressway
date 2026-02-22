@@ -73,7 +73,7 @@
         <h1>ELECTRON<br>EXPRESSWAY</h1>
         <div class="sub">Pro Online Edition</div>
         <button class="btn" onclick="startGame()">🏁 START SESSION</button>
-        <button class="btn" onclick="show('settings')">⚙ VIEW PB / CAMERA</button>
+        <button class="btn" onclick="showSettings()">⚙ VIEW PB / CAMERA</button>
     </div>
 
     <div id="settings" class="scr">
@@ -132,6 +132,11 @@
 </div>
 
 <script>
+var playerName = localStorage.getItem('hmcl_playerName');
+if(!playerName) {
+    playerName = prompt("请输入你的车手ID用于排行榜：") || "Guest" + Math.floor(Math.random()*1000);
+    localStorage.setItem('hmcl_playerName', playerName);
+}
 var lastTime = 0; 
 var cv=document.getElementById('cv'),c=cv.getContext('2d');
 var mi=document.getElementById('mini'),mc=mi.getContext('2d');
@@ -153,24 +158,43 @@ var g={
 };
 
 // 初始化：读取本地存档
-function loadPB() {
+function loadLeaderboard() {
+    // 先加载本地旧数据，防止报错
     var saved = localStorage.getItem('hmcl_racing_pb');
-    if(saved) {
-        g.pb = JSON.parse(saved);
-    }
-    updateSettingsUI();
-}
-loadPB();
+    if(saved) g.pb = JSON.parse(saved);
 
-function updateSettingsUI() {
     var display = document.getElementById('pb-display');
-    if(g.pb.lap < 1e9) {
-        display.innerHTML = `LAP: ${fmt(g.pb.lap)}<br>S1: ${(g.pb.s1/1000).toFixed(2)} | S2: ${(g.pb.s2/1000).toFixed(2)} | S3: ${(g.pb.s3/1000).toFixed(2)}`;
-    } else {
-        display.textContent = "No records yet. Go set a lap!";
-    }
-    document.getElementById('best').textContent = g.pb.lap < 1e9 ? fmt(g.pb.lap) : '--:--.---';
+    display.innerHTML = "Fetching Global Leaderboard...";
+
+    // 从服务器拉取排行榜
+    fetch('/api/leaderboard')
+        .then(res => res.json())
+        .then(data => {
+            var html = '<div style="text-align:left; display:inline-block;">';
+            if(data.length === 0) {
+                html += '暂无记录！';
+            } else {
+                data.forEach((p, i) => {
+                    var isMe = (p.name === playerName) ? 'color:var(--main);' : 'color:#fff;';
+                    html += `<div style="${isMe} margin-bottom:5px;">
+                        #${i+1} <b>${p.name}</b> - ${fmt(p.lap)} 
+                        <span style="font-size:12px;color:#888">(S1:${(p.s1/1000).toFixed(2)})</span>
+                    </div>`;
+                });
+            }
+            html += '</div>';
+            display.innerHTML = html;
+            
+            // 更新HUD显示的个人最好成绩
+            document.getElementById('best').textContent = g.pb.lap < 1e9 ? fmt(g.pb.lap) : '--:--.---';
+        })
+        .catch(err => {
+            display.innerHTML = "无法连接排行榜服务器";
+        });
 }
+
+// 页面加载时执行
+loadLeaderboard();
 
 function isMobile() { return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent); }
 function resize() {
@@ -216,7 +240,13 @@ function show(id){
     for(var i=0;i<all.length;i++)all[i].classList.remove('on');
     document.getElementById(id).classList.add('on');
 }
+// 新增的函数，放在 saveSettings 的上方
+function showSettings() {
+    loadLeaderboard(); // 关键：每次打开界面前，先去服务器抓取最新的排行榜数据
+    show('settings');   // 然后再切换显示界面
+}
 
+// 保持不变的原有函数
 function saveSettings(){
     cfg.camMode = parseInt(document.getElementById('camMode').value);
     show('menu');
@@ -344,9 +374,26 @@ function update(dt){
         document.getElementById('lap').textContent=g.lap;
         showLapTime(g.lap, lapTime);
         if(lapTime < g.pb.lap) {
+            // 更新本地数据
             g.pb = { lap: lapTime, s1: g.curSecTimes[0], s2: g.curSecTimes[1], s3: g.curSecTimes[2] };
             localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
-            updateSettingsUI();
+            
+            // 【新增】：发送给后端服务器
+            fetch('/api/leaderboard', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: playerName,
+                    lap: g.pb.lap,
+                    s1: g.pb.s1,
+                    s2: g.pb.s2,
+                    s3: g.pb.s3
+                })
+            }).then(() => {
+                // 上传成功后，刷新前端排行榜显示
+                loadLeaderboard();
+            });
+        }
         }
         setTimeout(endGame, 2000);
     }
