@@ -84,10 +84,23 @@ app.post('/api/leaderboard', async (req, res) => {
         res.status(500).json({ error: 'server_error' });
     }
 });
-
+app.delete('/api/leaderboard/:name', async (req, res) => {
+    try {
+        const name = req.params.name;
+        if (!name) {
+            return res.status(400).json({ error: 'invalid_name' });
+        }
+        await Record.deleteOne({ name });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('清空 PB 失败:', err);
+        res.status(500).json({ error: 'server_error' });
+    }
+});
 // =================================================
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
