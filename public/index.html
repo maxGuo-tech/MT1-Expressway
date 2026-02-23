@@ -217,33 +217,39 @@ function loadPB() {
 }
 // 初始化：读取本地存档
 function loadLeaderboard() {
-    loadPB();  // 统一从这里读 PB，保证结构正确
+    loadPB();  // 用前面加的 loadPB
+
     var display = document.getElementById('pb-display');
     display.innerHTML = "Fetching Global Leaderboard...";
 
-    // 从服务器拉取排行榜
-    fetch('/api/leaderboard')
-        .then(res => res.json())
+    fetch('https://mt1-expressway.onrender.com/api/leaderboard')
+        .then(res => {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        })
         .then(data => {
             var html = '<div style="text-align:left; display:inline-block;">';
-            if(data.length === 0) {
+            if (!data || data.length === 0) {
                 html += '暂无记录！';
             } else {
                 data.forEach((p, i) => {
                     var isMe = (p.name === playerName) ? 'color:var(--main);' : 'color:#fff;';
                     html += `<div style="${isMe} margin-bottom:5px;">
-                        #${i+1} <b>${p.name}</b> - ${fmt(p.lap)} 
-                        <span style="font-size:12px;color:#888">(S1:${(p.s1/1000).toFixed(2)})</span>
+                        #${i+1} <b>${p.name}</b> - ${fmt(p.lap)}
+                        <span style="font-size:12px;color:#888">
+                          (S1:${(p.s1/1000).toFixed(2)}  S2:${(p.s2/1000).toFixed(2)}  S3:${(p.s3/1000).toFixed(2)})
+                        </span>
                     </div>`;
                 });
             }
             html += '</div>';
             display.innerHTML = html;
-            
-            // 更新HUD显示的个人最好成绩
-            document.getElementById('best').textContent = g.pb.lap < 1e9 ? fmt(g.pb.lap) : '--:--.---';
+
+            document.getElementById('best').textContent =
+                g.pb.lap < 1e9 ? fmt(g.pb.lap) : '--:--.---';
         })
         .catch(err => {
+            console.error('加载排行榜失败:', err);
             display.innerHTML = "无法连接排行榜服务器";
         });
 }
