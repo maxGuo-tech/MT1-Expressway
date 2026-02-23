@@ -42,13 +42,21 @@ const LeaderboardSchema = new mongoose.Schema({
 const Record = mongoose.model('Record', LeaderboardSchema);
 
 // 获取排行榜接口
-app.get('/api/leaderboard', async (req, res) => {
-    try {
-        const data = await Record.find().sort({ lap: 1 }).limit(50);
-        res.json(data);
-    } catch (err) {
-        res.status(500).send(err);
+app.post('/api/leaderboard', async (req, res) => {
+  const { name, lap, s1, s2, s3 } = req.body;
+  const existing = await Record.findOne({ name });
+  if (existing) {
+    if (lap < existing.lap) {
+      existing.lap = lap;
+      existing.s1 = s1;
+      existing.s2 = s2;
+      existing.s3 = s3;
+      await existing.save();
     }
+  } else {
+    await Record.create({ name, lap, s1, s2, s3 });
+  }
+  res.json({ success: true });
 });
 
 // 提交成绩接口
@@ -77,3 +85,4 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
+
