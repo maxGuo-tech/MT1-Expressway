@@ -641,23 +641,6 @@ function closeLB() {
 <script>
     // 这里放联网和账号逻辑
     let currentUser = null;
-
-    function handleAuth(isReg) {
-        const user = document.getElementById('u-name').value;
-        const pass = document.getElementById('u-pass').value;
-        socket.emit('auth', { user, pass, isReg });
-    }
-
-    socket.on('authRes', (res) => {
-        if(res.ok) {
-            currentUser = res.user;
-            localStorage.setItem('hmcl_racing_pb', JSON.stringify(res.pb));
-            document.getElementById('auth-screen').style.display = 'none';
-            // 此时调用 loadPB 不会报错，因为 g 已经在上面的原版脚本中初始化了
-            if(typeof loadPB === 'function') loadPB(); 
-        } else { alert(res.msg); }
-    });
-
     // 自动拦截成绩更新发送到服务器
     const oldSet = localStorage.setItem;
     localStorage.setItem = function(k, v) {
