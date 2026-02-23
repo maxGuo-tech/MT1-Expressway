@@ -217,7 +217,7 @@ function loadPB() {
 }
 // 初始化：读取本地存档
 function loadLeaderboard() {
-    loadPB();  // 用前面加的 loadPB
+    loadPB();  // 如果你已经加了 loadPB，就用它统一读 PB
 
     var display = document.getElementById('pb-display');
     display.innerHTML = "Fetching Global Leaderboard...";
@@ -235,9 +235,11 @@ function loadLeaderboard() {
                 data.forEach((p, i) => {
                     var isMe = (p.name === playerName) ? 'color:var(--main);' : 'color:#fff;';
                     html += `<div style="${isMe} margin-bottom:5px;">
-                        #${i+1} <b>${p.name}</b> - ${fmt(p.lap)}
+                        #${i+1} <b>${p.name}</b> - ${fmt(p.lap)}<br>
                         <span style="font-size:12px;color:#888">
-                          (S1:${(p.s1/1000).toFixed(2)}  S2:${(p.s2/1000).toFixed(2)}  S3:${(p.s3/1000).toFixed(2)})
+                          S1: ${(p.s1/1000).toFixed(2)}s |
+                          S2: ${(p.s2/1000).toFixed(2)}s |
+                          S3: ${(p.s3/1000).toFixed(2)}s
                         </span>
                     </div>`;
                 });
@@ -245,6 +247,7 @@ function loadLeaderboard() {
             html += '</div>';
             display.innerHTML = html;
 
+            // HUD 显示本地 PB
             document.getElementById('best').textContent =
                 g.pb.lap < 1e9 ? fmt(g.pb.lap) : '--:--.---';
         })
@@ -534,8 +537,9 @@ function update(dt){
         if(g.currentSplitIdx == i && curIdx >= sp && prevIdx < sp) recordSector(i);
     }
     
-    if(g.lastProgress>0.9 && g.progress<0.1){
+    if (g.lastProgress > 0.9 && g.progress < 0.1) {
         var lapTime = Date.now() - g.lt;
+    
         recordSector(2);
         g.lap++;
         document.getElementById('lap').textContent = g.lap;
@@ -551,7 +555,7 @@ function update(dt){
             };
             localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
     
-            // 上传到排行榜
+            // 上传到排行榜（注意这里用完整 URL）
             fetch('https://mt1-expressway.onrender.com/api/leaderboard', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -568,7 +572,7 @@ function update(dt){
                 return r.json().catch(() => ({}));
             })
             .then(() => {
-                loadLeaderboard();
+                loadLeaderboard();   // 上传成功后刷新排行榜显示
             })
             .catch(err => {
                 console.error('上传排行榜失败:', err);
