@@ -310,23 +310,53 @@ function saveSettings(){
     show('menu');
 }
 
+// --- 用这段代码替换原本的 startGame 函数 ---
 function startGame(){
+    console.log("1. 按钮被点击了！准备开始...");
+
+    // 1. 获取名字 (简单的弹窗输入)
+    // 如果你不想每次都弹窗，可以把这行改成 var name = "Player1";
+    var name = prompt("请输入你的昵称 (用于排行榜):", "Guest");
+    if(!name) name = "Guest"; 
+
+    console.log("2. 玩家名字是:", name);
+
+    // 2. 发送登录信号给服务器 (但不等待服务器回应，直接开始游戏)
+    // 确保这里的 socket 变量名和你定义的一致
+    if(typeof socket !== 'undefined'){
+        socket.emit('login', { username: name });
+        console.log("3. 已发送登录请求给服务器...");
+    } else {
+        console.warn("注意：Socket 未连接，将在单机模式下运行");
+    }
+
+    // 3. 强制切换界面 (这是最关键的一步)
     if(isMobile()) {
         try { document.documentElement.requestFullscreen(); } catch(e) {}
     }
-    show('play');
+    
+    console.log("4. 正在切换显示层...");
+    show('play'); // 这一步会让菜单消失，游戏画面出现
+
+    // 4. 初始化游戏数据
     track=makeTrack();
     var stIdx = 5; var st=track[stIdx], nx=track[stIdx+5];
     car={x:st.x, y:st.y, a:Math.atan2(nx.y-st.y,nx.x-st.x), s:0, vx:0, vy:0};
     cam={x:car.x, y:car.y, zoom:0.4};
+    
+    // 重置全局变量
     g.on=0; g.lap=0; g.progress=0; g.lastProgress=0; g.curSecTimes=[0,0,0]; g.currentSplitIdx=0;
+    
+    // 清理之前的计时器
     g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts = [];
     resetSectorUI();
+    
     document.getElementById('lap').textContent='0';
     document.getElementById('lapMsg').style.display='none';
+    
+    console.log("5. 开始倒计时！");
     countdown();
 }
-
 function resetSectorUI() {
     for(var i=1; i<=3; i++) {
         var el = document.getElementById('s'+i+'-box');
