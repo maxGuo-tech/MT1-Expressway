@@ -89,6 +89,7 @@
         <h1 style="font-size:36px">SESSION INFO</h1>
         <div style="margin:20px 0; color:#fff; text-align:center; border: 1px solid #333; padding: 20px;">
             <p style="color:var(--main); margin-bottom:10px">PERSONAL BEST RECORDS:</p>
+            <button class="btn" onclick="resetPB()">RESET PB</button>
             <div id="pb-display">Loading...</div>
         </div>
         <div class="row">
@@ -372,7 +373,39 @@ function saveSettings(){
     cfg.camMode = parseInt(document.getElementById('camMode').value);
     show('menu');
 }
+function resetPB() {
+    if (!confirm('确定要清空你的个人最好成绩吗？此操作不可撤销。')) {
+        return;
+    }
 
+    // 重置本地内存和 localStorage
+    g.pb = { lap: Infinity, s1: Infinity, s2: Infinity, s3: Infinity };
+    localStorage.removeItem('hmcl_racing_pb');
+
+    // HUD 显示恢复
+    var bestEl = document.getElementById('best');
+    if (bestEl) bestEl.textContent = '--:--.---';
+    resetSectorUI();
+
+    // 通知服务器清除该玩家在排行榜的记录（可选，但推荐）
+    if (playerName) {
+        fetch('https://mt1-expressway.onrender.com/api/leaderboard/' + encodeURIComponent(playerName), {
+            method: 'DELETE'
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json().catch(() => ({}));
+        })
+        .then(() => {
+            console.log('服务器 PB 已清空');
+            // 清空后刷新排行榜
+            loadLeaderboard();
+        })
+        .catch(err => {
+            console.error('清空服务器 PB 失败:', err);
+        });
+    }
+}
 // --- 用这段代码替换原本的 startGame 函数 ---
 // 游戏开始逻辑
 function startGame(){
