@@ -19,9 +19,10 @@ app.use(express.static('public')); // 确保你的 HTML 文件在 public 文件�
 
 io.on('connection', (socket) => {
     console.log('有玩家连接:', socket.id);
-    
+
     socket.on('login', (data) => {
         console.log('玩家登录:', data.username);
+        // 这里暂时只记个名，之后你想做账号系统再改
     });
 });
 
@@ -41,30 +42,31 @@ const LeaderboardSchema = new mongoose.Schema({
 });
 const Record = mongoose.model('Record', LeaderboardSchema);
 
-// 获取排行榜接口
-app.post('/api/leaderboard', async (req, res) => {
-  const { name, lap, s1, s2, s3 } = req.body;
-  const existing = await Record.findOne({ name });
-  if (existing) {
-    if (lap < existing.lap) {
-      existing.lap = lap;
-      existing.s1 = s1;
-      existing.s2 = s2;
-      existing.s3 = s3;
-      await existing.save();
+// ================= 排行榜接口 =================
+
+// 获取排行榜（前端用 GET /api/leaderboard）
+app.get('/api/leaderboard', async (req, res) => {
+    try {
+        const data = await Record.find().sort({ lap: 1 }).limit(50);
+        res.json(data);
+    } catch (err) {
+        console.error('获取排行榜失败:', err);
+        res.status(500).json({ error: 'server_error' });
     }
-  } else {
-    await Record.create({ name, lap, s1, s2, s3 });
-  }
-  res.json({ success: true });
 });
 
-// 提交成绩接口
+// 提交成绩（前端用 POST /api/leaderboard）
 app.post('/api/leaderboard', async (req, res) => {
-    const { name, lap, s1, s2, s3 } = req.body;
     try {
+        const { name, lap, s1, s2, s3 } = req.body;
+
+        if (!name || !lap) {
+            return res.status(400).json({ error: 'invalid_params' });
+        }
+
         let existing = await Record.findOne({ name });
         if (existing) {
+            // 只在新的圈速更快时更新
             if (lap < existing.lap) {
                 existing.lap = lap;
                 existing.s1 = s1;
@@ -75,14 +77,17 @@ app.post('/api/leaderboard', async (req, res) => {
         } else {
             await Record.create({ name, lap, s1, s2, s3 });
         }
-        res.send({ success: true });
+
+        res.json({ success: true });
     } catch (err) {
-        res.status(500).send(err);
+        console.error('保存成绩失败:', err);
+        res.status(500).json({ error: 'server_error' });
     }
 });
+
+// =================================================
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
-
