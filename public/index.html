@@ -254,8 +254,23 @@ function makeTrack(){
     g.splitIndices = splits; return p;
 }
 
-document.onkeydown=function(e){ var k=e.key.toLowerCase(); if(k=='w'||k=='arrowup')keys.w=1; if(k=='a'||k=='arrowleft')keys.a=1; if(k=='s'||k=='arrowdown')keys.s=1; if(k=='d'||k=='arrowright')keys.d=1; };
-document.onkeyup=function(e){ var k=e.key.toLowerCase(); if(k=='w'||k=='arrowup')keys.w=0; if(k=='a'||k=='arrowleft')keys.a=0; if(k=='s'||k=='arrowdown')keys.s=0; if(k=='d'||k=='arrowright')keys.d=0; };
+document.onkeydown = function(e){ 
+    if(!e || !e.key) return; // 新增：安全检查，防止报错
+    var k = e.key.toLowerCase(); 
+    if(k=='w'||k=='arrowup') keys.w=1; 
+    if(k=='a'||k=='arrowleft') keys.a=1; 
+    if(k=='s'||k=='arrowdown') keys.s=1; 
+    if(k=='d'||k=='arrowright') keys.d=1; 
+};
+
+document.onkeyup = function(e){ 
+    if(!e || !e.key) return; // 新增：安全检查，防止报错
+    var k = e.key.toLowerCase(); 
+    if(k=='w'||k=='arrowup') keys.w=0; 
+    if(k=='a'||k=='arrowleft') keys.a=0; 
+    if(k=='s'||k=='arrowdown') keys.s=0; 
+    if(k=='d'||k=='arrowright') keys.d=0; 
+};
 
     // 处理登录/注册逻辑
 function handleAuth(mode) {
@@ -556,7 +571,6 @@ function closeLB() {
 
 <script>
     // 这里放联网和账号逻辑
-    const socket = io("https://mt1-expressway.onrender.com");
     let currentUser = null;
 
     function handleAuth(isReg) {
