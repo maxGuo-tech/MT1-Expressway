@@ -170,7 +170,20 @@ var cv=document.getElementById('cv'),c=cv.getContext('2d');
 var mi=document.getElementById('mini'),mc=mi.getContext('2d');
 cv.width=1000;cv.height=700;mi.width=200;mi.height=200;
 
-var cfg={laps:1, camMode:0}; 
+var cfg = { laps: 1, camMode: 0 };
+
+(function loadSettings(){
+    try {
+        var s = localStorage.getItem('hmcl_settings');
+        if (s) {
+            var d = JSON.parse(s);
+            if (typeof d.camMode === 'number') cfg.camMode = d.camMode;
+            if (typeof d.laps === 'number') cfg.laps = d.laps;
+        }
+    } catch(e) {
+        console.error('读取设置失败', e);
+    }
+})();
 var track=[], trackSplits=[], tw=260; 
 var car={x:0,y:0,a:0,s:0,vx:0,vy:0};
 var cam={x:0,y:0,zoom:0.4}; 
@@ -180,17 +193,31 @@ var g={
     splitIndices: [], 
     secStartTime: 0,
     curSecTimes: [0,0,0],
-    pb: { lap: 1e9, s1: null, s2: null, s3: null },
+    pb: { lap: Infinity, s1: Infinity, s2: Infinity, s3: Infinity },
     currentSplitIdx: 0,
     uiTimeouts: []
 };
-
+function loadPB() {
+    try {
+        var saved = localStorage.getItem('hmcl_racing_pb');
+        if (saved) {
+            var d = JSON.parse(saved);
+            if (typeof d.lap === 'number') {
+                g.pb = {
+                    lap: d.lap,
+                    s1: typeof d.s1 === 'number' ? d.s1 : Infinity,
+                    s2: typeof d.s2 === 'number' ? d.s2 : Infinity,
+                    s3: typeof d.s3 === 'number' ? d.s3 : Infinity
+                };
+            }
+        }
+    } catch (e) {
+        console.error('读取 PB 失败:', e);
+    }
+}
 // 初始化：读取本地存档
 function loadLeaderboard() {
-    // 先加载本地旧数据，防止报错
-    var saved = localStorage.getItem('hmcl_racing_pb');
-    if(saved) g.pb = JSON.parse(saved);
-
+    loadPB();  // 统一从这里读 PB，保证结构正确
     var display = document.getElementById('pb-display');
     display.innerHTML = "Fetching Global Leaderboard...";
 
@@ -320,10 +347,17 @@ function show(id){
 }
 // 新增的函数，放在 saveSettings 的上方
 function showSettings() {
-    loadLeaderboard(); // 关键：每次打开界面前，先去服务器抓取最新的排行榜数据
-    show('settings');   // 然后再切换显示界面
-}
+    var camSel = document.getElementById('camMode');
+    if (camSel) camSel.value = String(cfg.camMode);
 
+    var lapsSel = document.getElementById('laps');
+    if (lapsSel && typeof cfg.laps === 'number') {
+        lapsSel.value = String(cfg.laps);
+    }
+
+    loadLeaderboard();
+    show('settings');
+}
 // 保持不变的原有函数
 function saveSettings(){
     cfg.camMode = parseInt(document.getElementById('camMode').value);
@@ -495,18 +529,24 @@ function update(dt){
     }
     
     if(g.lastProgress>0.9 && g.progress<0.1){
-        var lapTime=Date.now()-g.lt;
+        var lapTime = Date.now() - g.lt;
         recordSector(2);
         g.lap++;
-        document.getElementById('lap').textContent=g.lap;
+        document.getElementById('lap').textContent = g.lap;
         showLapTime(g.lap, lapTime);
-        if(lapTime < g.pb.lap) {
-            // 更新本地数据
-            g.pb = { lap: lapTime, s1: g.curSecTimes[0], s2: g.curSecTimes[1], s3: g.curSecTimes[2] };
+    
+        if (lapTime < g.pb.lap) {
+            // 更新本地 PB
+            g.pb = {
+                lap: lapTime,
+                s1: g.curSecTimes[0],
+                s2: g.curSecTimes[1],
+                s3: g.curSecTimes[2]
+            };
             localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
-            
-            // 【新增】：发送给后端服务器
-            fetch('/api/leaderboard', {
+    
+            // 上传到排行榜
+            fetch('https://mt1-expressway.onrender.com/api/leaderboard', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -516,11 +556,19 @@ function update(dt){
                     s2: g.pb.s2,
                     s3: g.pb.s3
                 })
-            }).then(() => {
-                // 上传成功后，刷新前端排行榜显示
+            })
+            .then(r => {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json().catch(() => ({}));
+            })
+            .then(() => {
                 loadLeaderboard();
+            })
+            .catch(err => {
+                console.error('上传排行榜失败:', err);
             });
         }
+    
         setTimeout(endGame, 2000);
     }
     
