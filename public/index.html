@@ -57,25 +57,31 @@
 <body>
 
 <!-- 1. 账号层 -->
-<div id="auth-screen">
-    <h1 style="color:#00f0ff; font-size:36px;">SYSTEM ACCESS</h1>
-    <div class="auth-box">
-        <input type="text" id="u-name" placeholder="USERNAME">
-        <input type="password" id="u-pass" placeholder="PASSWORD">
-        <button class="btn" onclick="handleAuth(false)">LOGIN</button>
-        <button class="btn" onclick="handleAuth(true)" style="border-color:#888; font-size:12px;">REGISTER</button>
-    </div>
-</div>
+<div id="auth" class="scr on">
+  <h1>ELECTRON<br>EXPRESSWAY</h1>
+  <div class="sub">Login to save your PB</div>
 
+  <div style="margin-top:20px">
+    <input id="login-username" 
+           type="text" 
+           placeholder="Username"
+           style="padding:8px 10px;margin-bottom:10px;width:200px">
+    <br>
+    <input id="login-password" 
+           type="password" 
+           placeholder="Password"
+           style="padding:8px 10px;margin-bottom:10px;width:200px">
+  </div>
+
+  <button class="btn" onclick="handleAuth()">LOGIN</button>
+</div>
 <!-- 2. 原版游戏结构 [1] -->
 <div id="game">
-    <div id="menu" class="scr on">
+    <div id="menu" class="scr">
         <h1>ELECTRON<br>EXPRESSWAY</h1>
-        <div class="sub">Single-person Demo</div>
-        <!-- 添加这两个按钮 -->
-        <button class="btn" onclick="handleAuth('login')">🔑 LOGIN / SYNC</button> 
-        <button class="btn" onclick="startGame()">🏁 START SESSION</button>
-        <button class="btn" onclick="show('settings')">⚙ VIEW PB / CAMERA</button>
+          <div class="sub">Single-person Demo</div>
+          <button class="btn" onclick="startGame()">🏁 START SESSION</button>
+          <button class="btn" onclick="showSettings()">⚙ VIEW PB / CAMERA</button>
     </div>
 </div>
 
@@ -136,6 +142,7 @@
 
 <script>
 // 确保前面的 CDN 链接已经加上了
+var playerName = localStorage.getItem('hmcl_playerName') || '';
 var socket = io("https://mt1-expressway.onrender.com", {
     transports: ['websocket', 'polling'] // 强制尝试多种连接方式
 });
@@ -154,7 +161,6 @@ socket.on("connect", () => {
 
 var cfg={laps:1, camMode:0}; 
 var socket = io("https://mt1-expressway.onrender.com");
-var playerName = localStorage.getItem('hmcl_playerName');
 if(!playerName) {
     playerName = prompt("请输入你的车手ID用于排行榜：") || "Guest" + Math.floor(Math.random()*1000);
     localStorage.setItem('hmcl_playerName', playerName);
@@ -273,26 +279,48 @@ document.onkeyup = function(e){
 };
 
     // 处理登录/注册逻辑
-function handleAuth(mode) {
-    const username = prompt("请输入你的赛车手代号:");
-    if (!username) return;
+function handleAuth() {
+    console.log('点击登录按钮');
 
-    // 向后端发送登录请求
-    socket.emit("login", { 
-        username: username, 
-        mode: mode 
-    });
-}
-
-// 监听后端返回的登录结果
-socket.on("auth_success", (data) => {
-    alert("欢迎回来, " + data.username + "！你的记录已同步。");
-    // 这里可以把后端传回来的 PB 覆盖掉本地的
-    if(data.pb) {
-        g.pb = data.pb;
-        updateSettingsUI();
+    var uInput = document.getElementById('login-username');
+    var pInput = document.getElementById('login-password');
+    if (!uInput || !pInput) {
+        console.error('找不到登录输入框');
+        return;
     }
-});
+
+    var username = (uInput.value || '').trim();
+    var password = (pInput.value || '').trim();
+
+    if (!username || !password) {
+        alert('账号和密码都要填哦');
+        return;
+    }
+
+    // 这里可以做一点最简单的校验逻辑（比如长度限制）
+    if (username.length > 20) {
+        alert('用户名太长了，<=20 个字符');
+        return;
+    }
+
+    // 记录到本地，后面 PB / 排行榜用这个名字
+    playerName = username;
+    localStorage.setItem('hmcl_playerName', playerName);
+
+    // 告诉服务器（如果 socket 存在就发，不存在也不阻塞）
+    if (typeof socket !== 'undefined') {
+        socket.emit('login', {
+            username: username,
+            password: password  // 目前后端可以先只记个名，之后再决定要不要真校验
+        });
+        console.log('已发送 login 事件给服务器');
+    } else {
+        console.warn('socket 未定义，将在本地模式登录');
+    }
+
+    // 登录成功后切换到主菜单
+    show('menu');
+}
 function show(id){
     var all=document.querySelectorAll('.scr');
     for(var i=0;i<all.length;i++)all[i].classList.remove('on');
@@ -311,52 +339,71 @@ function saveSettings(){
 }
 
 // --- 用这段代码替换原本的 startGame 函数 ---
+// 游戏开始逻辑
 function startGame(){
     console.log("1. 按钮被点击了！准备开始...");
 
-    // 1. 获取名字 (简单的弹窗输入)
-    // 如果你不想每次都弹窗，可以把这行改成 var name = "Player1";
-    var name = prompt("请输入你的昵称 (用于排行榜):", "Guest");
-    if(!name) name = "Guest"; 
+    // 获取玩家名字
+    if(!playerName){
+        playerName = prompt("请输入你的昵称 (用于排行榜):", "Guest");
+        if(!playerName) playerName = "Guest";
+        localStorage.setItem('hmcl_playerName', playerName);
+    }
+    console.log("2. 玩家名字是:", playerName);
 
-    console.log("2. 玩家名字是:", name);
-
-    // 2. 发送登录信号给服务器 (但不等待服务器回应，直接开始游戏)
-    // 确保这里的 socket 变量名和你定义的一致
+    // 发送登录请求给服务器
     if(typeof socket !== 'undefined'){
-        socket.emit('login', { username: name });
+        socket.emit('login', { username: playerName });
         console.log("3. 已发送登录请求给服务器...");
     } else {
         console.warn("注意：Socket 未连接，将在单机模式下运行");
     }
 
-    // 3. 强制切换界面 (这是最关键的一步)
+    // 显示游戏画面
     if(isMobile()) {
         try { document.documentElement.requestFullscreen(); } catch(e) {}
     }
-    
     console.log("4. 正在切换显示层...");
-    show('play'); // 这一步会让菜单消失，游戏画面出现
+    show('play'); // 切换到游戏画面
 
-    // 4. 初始化游戏数据
+    // 初始化游戏数据
     track=makeTrack();
-    var stIdx = 5; var st=track[stIdx], nx=track[stIdx+5];
+    var stIdx = 5; 
+    var st=track[stIdx], nx=track[stIdx+5];
     car={x:st.x, y:st.y, a:Math.atan2(nx.y-st.y,nx.x-st.x), s:0, vx:0, vy:0};
     cam={x:car.x, y:car.y, zoom:0.4};
     
     // 重置全局变量
-    g.on=0; g.lap=0; g.progress=0; g.lastProgress=0; g.curSecTimes=[0,0,0]; g.currentSplitIdx=0;
+    g.on=0; g.lap=0; g.progress=0; g.lastProgress=0; 
+    g.curSecTimes=[0,0,0]; g.currentSplitIdx=0;
     
-    // 清理之前的计时器
+    // 清理 UI 计时器
     g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts = [];
     resetSectorUI();
     
     document.getElementById('lap').textContent='0';
     document.getElementById('lapMsg').style.display='none';
-    
+
     console.log("5. 开始倒计时！");
     countdown();
 }
+
+/*
+function startGame(){
+    if(isMobile()){ try{document.documentElement.requestFullscreen();}catch(e){} }
+    show('play'); 
+    track=makeTrack(); 
+    var stIdx=5; var st=track[stIdx], nx=track[stIdx+5]; 
+    car={x:st.x,y:st.y,a:Math.atan2(nx.y-st.y,nx.x-st.x),s:0,vx:0,vy:0}; 
+    cam={x:car.x,y:car.y,zoom:0.4}; 
+    g.on=0; g.lap=0; g.progress=0; g.lastProgress=0; g.curSecTimes=[0,0,0]; g.currentSplitIdx=0;
+    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts=[]; 
+    resetSectorUI(); 
+    document.getElementById('lap').textContent='0'; 
+    document.getElementById('lapMsg').style.display='none'; 
+    countdown(); 
+}
+*/
 function resetSectorUI() {
     for(var i=1; i<=3; i++) {
         var el = document.getElementById('s'+i+'-box');
