@@ -363,7 +363,11 @@ document.onkeyup = function(e){
     if(k=='s'||k=='arrowdown') keys.s=0; 
     if(k=='d'||k=='arrowright') keys.d=0; 
 };
-
+function show(id){
+    var all=document.querySelectorAll('.scr');
+    for(var i=0;i<all.length;i++)all[i].classList.remove('on');
+    document.getElementById(id).classList.add('on');
+}
     // 处理登录/注册逻辑
 function handleAuth() {
     console.log('点击登录按钮');
@@ -398,11 +402,6 @@ function handleAuth() {
 
     // 登录成功，进入主菜单
     show('menu');
-}
-function show(id){
-    var all=document.querySelectorAll('.scr');
-    for(var i=0;i<all.length;i++)all[i].classList.remove('on');
-    document.getElementById(id).classList.add('on');
 }
 // 新增的函数，放在 saveSettings 的上方
 function showSettings() {
@@ -923,9 +922,7 @@ function closeLB() {
     }
 }
 </script>
-    // 这里放联网和账号逻辑
 <script>
-/* ===================== 登录逻辑 ===================== */
 
 var playerName = localStorage.getItem('hmcl_playerName') || '';
 
