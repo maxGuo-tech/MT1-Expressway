@@ -178,8 +178,47 @@
 </div>
 
 <script>
-// 确保前面的 CDN 链接已经加上了
+// ===== 全局与初始化 =====
 var playerName = localStorage.getItem('hmcl_playerName') || '';
+var cfg = { laps: 1, camMode: 0 };
+
+var cv = document.getElementById('cv'),
+    c  = cv.getContext('2d');
+var mi = document.getElementById('mini'),
+    mc = mi.getContext('2d');
+cv.width = 1000; cv.height = 700;
+mi.width = 200;  mi.height  = 200;
+
+var track = [], tw = 260;
+var car   = { x:0, y:0, a:0, s:0, vx:0, vy:0 };
+var cam   = { x:0, y:0, zoom:0.4 };
+var keys  = { w:0, a:0, s:0, d:0 };
+
+var g = {
+    on:0, st:0, lt:0, lap:0,
+    progress:0, lastProgress:0,
+    splitIndices: [],
+    secStartTime: 0,
+    curSecTimes: [0,0,0],
+    pb: { lap: Infinity, s1: Infinity, s2: Infinity, s3: Infinity },
+    currentSplitIdx: 0,
+    uiTimeouts: []
+};
+
+var lastTime = 0;
+
+// ===== Socket 与多人状态 =====
+var mpState = {
+    inRoom: false,
+    roomId: null,
+    isOwner: false,
+    maxPlayers: 4,
+    laps: 3,
+    password: '',
+    players: {}, // { id: { name, car:{x,y,a}, progress, lap } }
+    myId: null
+};
+
 var socket = io("https://mt1-expressway.onrender.com", {
     transports: ['websocket', 'polling']
 });
@@ -188,66 +227,97 @@ socket.on("connect", () => {
     console.log("已成功连接到服务器！ID:", socket.id);
     mpState.myId = socket.id;
 });
-var cv=document.getElementById('cv'),c=cv.getContext('2d');
-var mi=document.getElementById('mini'),mc=mi.getContext('2d');
-cv.width=1000;cv.height=700;mi.width=200;mi.height=200;
 
- 
-
-socket.on("connect", () => {
-    console.log("已成功连接到服务器！ID:", socket.id);
-});
-// -----------------------
-
-var cfg={laps:1, camMode:0}; 
-if(!playerName) {
-    playerName = prompt("请输入你的车手ID用于排行榜：") || "Guest" + Math.floor(Math.random()*1000);
-    localStorage.setItem('hmcl_playerName', playerName);
+// ===== 工具函数 =====
+function fmt(ms){
+    var m=Math.floor(ms/60000),
+        s=Math.floor(ms%60000/1000),
+        l=ms%1000;
+    return (m<10?'0':'')+m+':' +
+           (s<10?'0':'')+s+'.' +
+           (l<100?'0':'')+(l<10?'0':'')+l;
 }
-var lastTime = 0; 
-var cv=document.getElementById('cv'),c=cv.getContext('2d');
-var mi=document.getElementById('mini'),mc=mi.getContext('2d');
-cv.width=1000;cv.height=700;mi.width=200;mi.height=200;
 
-var cfg = { laps: 1, camMode: 0 };
+function show(id){
+    var all = document.querySelectorAll('.scr');
+    for(var i=0;i<all.length;i++) all[i].classList.remove('on');
+    var el = document.getElementById(id);
+    if (el) el.classList.add('on');
+}
 
+function isMobile(){
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
+        .test(navigator.userAgent);
+}
+
+function resize() {
+    var game = document.getElementById('game');
+    if (!game) return;
+    var ww = window.innerWidth, wh = window.innerHeight;
+    var ratio = Math.min(ww/1000, wh/700);
+    game.style.transform = 'scale(' + ratio + ')';
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ===== 键盘与移动控制 =====
+document.onkeydown = function(e){
+    if(!e || !e.key) return;
+    var k = e.key.toLowerCase();
+    if(k=='w'||k=='arrowup')    keys.w=1;
+    if(k=='a'||k=='arrowleft')  keys.a=1;
+    if(k=='s'||k=='arrowdown')  keys.s=1;
+    if(k=='d'||k=='arrowright') keys.d=1;
+};
+document.onkeyup = function(e){
+    if(!e || !e.key) return;
+    var k = e.key.toLowerCase();
+    if(k=='w'||k=='arrowup')    keys.w=0;
+    if(k=='a'||k=='arrowleft')  keys.a=0;
+    if(k=='s'||k=='arrowdown')  keys.s=0;
+    if(k=='d'||k=='arrowright') keys.d=0;
+};
+
+if (isMobile()) {
+    var mcWrap = document.getElementById('mobile-controls');
+    if (mcWrap) mcWrap.style.display = 'flex';
+    var btns = document.querySelectorAll('.m-btn');
+    btns.forEach(function(btn){
+        var k = btn.getAttribute('data-k');
+        btn.addEventListener('touchstart', function(e){ e.preventDefault(); keys[k]=1; }, {passive:false});
+        btn.addEventListener('touchend',   function(e){ e.preventDefault(); keys[k]=0; }, {passive:false});
+    });
+}
+
+// ===== 设置 / PB / 排行 =====
 (function loadSettings(){
     try {
         var s = localStorage.getItem('hmcl_settings');
         if (s) {
             var d = JSON.parse(s);
             if (typeof d.camMode === 'number') cfg.camMode = d.camMode;
-            if (typeof d.laps === 'number') cfg.laps = d.laps;
+            if (typeof d.laps    === 'number') cfg.laps    = d.laps;
         }
-    } catch(e) {
-        console.error('读取设置失败', e);
-    }
+    } catch(e) { console.error('读取设置失败', e); }
 })();
-// 多人游戏状态
-var mpState = {
-    inRoom: false,
-    roomId: null,
-    isOwner: false,
-    maxPlayers: 4,
-    laps: 3,
-    password: '',
-    players: {},      // { socketId: { name, car } }
-    myId: null
-};
-var track=[], trackSplits=[], tw=260; 
-var car={x:0,y:0,a:0,s:0,vx:0,vy:0};
-var cam={x:0,y:0,zoom:0.4}; 
-var keys={w:0,a:0,s:0,d:0};
-var g={
-    on:0,st:0,lt:0,lap:0, progress:0,lastProgress:0,
-    splitIndices: [], 
-    secStartTime: 0,
-    curSecTimes: [0,0,0],
-    pb: { lap: Infinity, s1: Infinity, s2: Infinity, s3: Infinity },
-    currentSplitIdx: 0,
-    uiTimeouts: []
-};
-function loadPB() {
+
+function saveSettings(){
+    cfg.camMode = parseInt(document.getElementById('camMode').value, 10);
+    cfg.laps    = parseInt(document.getElementById('laps').value, 10) || cfg.laps;
+    localStorage.setItem('hmcl_settings', JSON.stringify(cfg));
+    show('menu');
+}
+
+function showSettings(){
+    var camSel  = document.getElementById('camMode');
+    var lapsSel = document.getElementById('laps');
+    if (camSel)  camSel.value  = String(cfg.camMode);
+    if (lapsSel) lapsSel.value = String(cfg.laps);
+    loadLeaderboard();
+    show('settings');
+}
+
+function loadPB(){
     try {
         var saved = localStorage.getItem('hmcl_racing_pb');
         if (saved) {
@@ -261,676 +331,75 @@ function loadPB() {
                 };
             }
         }
-    } catch (e) {
-        console.error('读取 PB 失败:', e);
-    }
+    } catch (e) { console.error('读取 PB 失败:', e); }
 }
-// 初始化：读取本地存档
-function loadLeaderboard() {
-    loadPB();  // 如果你已经加了 loadPB，就用它统一读 PB
 
+function loadLeaderboard(){
+    loadPB();
     var display = document.getElementById('pb-display');
+    if (!display) return;
     display.innerHTML = "Fetching Global Leaderboard...";
-
     fetch('https://mt1-expressway.onrender.com/api/leaderboard')
-        .then(res => {
-            if (!res.ok) throw new Error('HTTP ' + res.status);
+        .then(function(res){
+            if (!res.ok) throw new Error('HTTP '+res.status);
             return res.json();
         })
-        .then(data => {
-            var html = '<div style="text-align:left; display:inline-block;">';
-            if (!data || data.length === 0) {
+        .then(function(data){
+            var html = '<div style="text-align:left;display:inline-block;">';
+            if (!data || !data.length) {
                 html += '暂无记录！';
             } else {
-                data.forEach((p, i) => {
+                data.forEach(function(p,i){
                     var isMe = (p.name === playerName) ? 'color:var(--main);' : 'color:#fff;';
-                    html += `<div style="${isMe} margin-bottom:5px;">
-                        #${i+1} <b>${p.name}</b> - ${fmt(p.lap)}<br>
-                        <span style="font-size:12px;color:#888">
-                          S1: ${(p.s1/1000).toFixed(2)}s |
-                          S2: ${(p.s2/1000).toFixed(2)}s |
-                          S3: ${(p.s3/1000).toFixed(2)}s
-                        </span>
-                    </div>`;
+                    html += '<div style="'+isMe+' margin-bottom:5px;">' +
+                            '#'+(i+1)+' <b>'+p.name+'</b> - '+fmt(p.lap)+'<br>' +
+                            '<span style="font-size:12px;color:#888">' +
+                            'S1: '+(p.s1/1000).toFixed(2)+'s | '+
+                            'S2: '+(p.s2/1000).toFixed(2)+'s | '+
+                            'S3: '+(p.s3/1000).toFixed(2)+'s' +
+                            '</span></div>';
                 });
             }
             html += '</div>';
             display.innerHTML = html;
-
-            // HUD 显示本地 PB
-            document.getElementById('best').textContent =
-                g.pb.lap < 1e9 ? fmt(g.pb.lap) : '--:--.---';
+            var bestEl = document.getElementById('best');
+            if (bestEl)
+                bestEl.textContent = g.pb.lap < 1e9 ? fmt(g.pb.lap) : '--:--.---';
         })
-        .catch(err => {
+        .catch(function(err){
             console.error('加载排行榜失败:', err);
             display.innerHTML = "无法连接排行榜服务器";
         });
 }
 
-// 页面加载时执行
-loadLeaderboard();
-
-function isMobile() { return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent); }
-function resize() {
-    var game = document.getElementById('game');
-    var ww = window.innerWidth, wh = window.innerHeight;
-    var ratio = Math.min(ww / 1000, wh / 700);
-    game.style.transform = 'scale(' + ratio + ')';
-}
-window.addEventListener('resize', resize);
-resize();
-
-if (isMobile()) {
-    document.getElementById('mobile-controls').style.display = 'flex';
-    var btns = document.querySelectorAll('.m-btn');
-    btns.forEach(function(btn) {
-        var k = btn.getAttribute('data-k');
-        btn.addEventListener('touchstart', function(e) { e.preventDefault(); keys[k] = 1; }, {passive: false});
-        btn.addEventListener('touchend', function(e) { e.preventDefault(); keys[k] = 0; }, {passive: false});
-    });
-}
-
-function makeTrack(){
-    var p=[]; var x=0, y=0, a=0; var splits = []; 
-    function addSeg(type, val1, val2, val3) {
-        if(type=='s'){ var st=Math.ceil(val1/50); for(var j=0;j<st;j++){ p.push({x:x,y:y,a:a}); x+=Math.cos(a)*50; y+=Math.sin(a)*50; }
-        }else{ var arc=val1*Math.abs(val2); var st=Math.ceil(arc/40); var da=val2/st*val3; for(var j=0;j<st;j++){ p.push({x:x,y:y,a:a}); a+=da; x+=Math.cos(a)*40; y+=Math.sin(a)*40; } }
-    }
-    addSeg('s', 2500); addSeg('c', 600, Math.PI*0.6, -1); addSeg('s', 400); addSeg('c', 400, Math.PI*0.4, -1); addSeg('s', 600); addSeg('c', 400, Math.PI*0.3, 1); addSeg('s', 800);
-    splits.push(p.length); // S1
-    addSeg('c', 500, Math.PI*0.4, -1); addSeg('s', 1500); addSeg('c', 400, Math.PI*1.05, 1); addSeg('s', 600); addSeg('c', 400, Math.PI*0.9, -1); addSeg('s', 1200); addSeg('c', 500, Math.PI*0.3, 1); addSeg('s', 800);
-    splits.push(p.length); // S2
-    addSeg('c', 600, Math.PI*0.5, -1); addSeg('s', 3000); addSeg('c', 700, Math.PI*0.5, -1); addSeg('s', 5500); addSeg('c', 700, Math.PI*0.5, -1);
-    var sx=0,sy=0; var lp=p[p.length-1]; var dist=Math.hypot(sx-lp.x,sy-lp.y); var cls=Math.ceil(dist/50);
-    for(var i=1;i<=cls;i++){ var t=i/cls; var t2=t*t*(3-2*t); p.push({x:lp.x+(sx-lp.x)*t2, y:lp.y+(sy-lp.y)*t2, a:a+(0-a)*t}); }
-    g.splitIndices = splits; return p;
-}
-
-document.onkeydown = function(e){ 
-    if(!e || !e.key) return; // 新增：安全检查，防止报错
-    var k = e.key.toLowerCase(); 
-    if(k=='w'||k=='arrowup') keys.w=1; 
-    if(k=='a'||k=='arrowleft') keys.a=1; 
-    if(k=='s'||k=='arrowdown') keys.s=1; 
-    if(k=='d'||k=='arrowright') keys.d=1; 
-};
-
-document.onkeyup = function(e){ 
-    if(!e || !e.key) return; // 新增：安全检查，防止报错
-    var k = e.key.toLowerCase(); 
-    if(k=='w'||k=='arrowup') keys.w=0; 
-    if(k=='a'||k=='arrowleft') keys.a=0; 
-    if(k=='s'||k=='arrowdown') keys.s=0; 
-    if(k=='d'||k=='arrowright') keys.d=0; 
-};
-function show(id){
-    var all=document.querySelectorAll('.scr');
-    for(var i=0;i<all.length;i++)all[i].classList.remove('on');
-    document.getElementById(id).classList.add('on');
-}
-    // 处理登录/注册逻辑
-function handleAuth() {
-    console.log('点击登录按钮');
-
-    var uInput = document.getElementById('login-username');
-    var pInput = document.getElementById('login-password');
-
-    // 防御：如果还拿不到，直接报错返回，避免 value 报错
-    if (!uInput || !pInput) {
-        console.error('找不到登录输入框 login-username / login-password');
-        alert('页面结构有问题：找不到登录输入框');
-        return;
-    }
-
-    var username = (uInput.value || '').trim();
-    var password = (pInput.value || '').trim();
-
-    if (!username || !password) {
-        alert('账号和密码都要填哦');
-        return;
-    }
-
-    // 记录玩家名
-    playerName = username;
-    localStorage.setItem('hmcl_playerName', playerName);
-
-    // 通知服务器（可选）
-    if (typeof socket !== 'undefined') {
-        socket.emit('login', { username, password });
-        console.log('已发送 login 事件给服务器');
-    }
-
-    // 登录成功，进入主菜单
-    show('menu');
-}
-// 新增的函数，放在 saveSettings 的上方
-function showSettings() {
-    var camSel = document.getElementById('camMode');
-    if (camSel) camSel.value = String(cfg.camMode);
-
-    var lapsSel = document.getElementById('laps');
-    if (lapsSel && typeof cfg.laps === 'number') {
-        lapsSel.value = String(cfg.laps);
-    }
-
-    loadLeaderboard();
-    show('settings');
-}
-function showMultiplayer() {
-    document.getElementById('mp-status').textContent = '';
-    document.getElementById('mp-player-list').innerHTML = '';
-    document.getElementById('mp-owner-controls').style.display = 'none';
-    show('multiplayer');
-}
-function createRoom() {
-    var roomName = document.getElementById('mp-room-name').value.trim() || ('room-' + Math.floor(Math.random()*10000));
-    var maxPlayers = parseInt(document.getElementById('mp-max-players').value, 10) || 4;
-    var laps = parseInt(document.getElementById('mp-laps').value, 10) || 3;
-    var password = document.getElementById('mp-password').value || '';
-
-    maxPlayers = Math.max(2, Math.min(8, maxPlayers));
-
-    mpState.roomId = roomName;
-    mpState.maxPlayers = maxPlayers;
-    mpState.laps = laps;
-    mpState.password = password;
-    mpState.isOwner = true;
-
-    socket.emit('room:create', {
-        roomId: roomName,
-        maxPlayers,
-        laps,
-        password,
-        name: playerName
-    });
-
-    document.getElementById('mp-status').textContent = '正在创建房间...';
-}
-
-function joinRoom() {
-    var roomName = document.getElementById('mp-room-name').value.trim();
-    if (!roomName) {
-        alert('请输入房间名');
-        return;
-    }
-    var password = document.getElementById('mp-password').value || '';
-
-    mpState.roomId = roomName;
-    mpState.isOwner = false;
-
-    socket.emit('room:join', {
-        roomId: roomName,
-        password,
-        name: playerName
-    });
-
-    document.getElementById('mp-status').textContent = '正在加入房间...';
-}
-// 保持不变的原有函数
-function saveSettings(){
-    cfg.camMode = parseInt(document.getElementById('camMode').value);
-    show('menu');
-}
-// 房间创建/加入结果
-
-function startMultiplayerRace() {
-    if (!mpState.inRoom || !mpState.isOwner) return;
-
-    socket.emit('race:start', {
-        roomId: mpState.roomId,
-        laps: mpState.laps
-    });
-}
-function resetPB() {
-    if (!confirm('确定要清空你的个人最好成绩吗？此操作不可撤销。')) {
-        return;
-    }
-
-    // 重置本地内存和 localStorage
+function resetPB(){
+    if (!confirm('确定要清空你的个人最好成绩吗？此操作不可撤销。')) return;
     g.pb = { lap: Infinity, s1: Infinity, s2: Infinity, s3: Infinity };
     localStorage.removeItem('hmcl_racing_pb');
-
-    // HUD 显示恢复
     var bestEl = document.getElementById('best');
     if (bestEl) bestEl.textContent = '--:--.---';
     resetSectorUI();
-
-    // 通知服务器清除该玩家在排行榜的记录（可选，但推荐）
     if (playerName) {
-        fetch('https://mt1-expressway.onrender.com/api/leaderboard/' + encodeURIComponent(playerName), {
-            method: 'DELETE'
+        fetch('https://mt1-expressway.onrender.com/api/leaderboard/' +
+              encodeURIComponent(playerName), { method:'DELETE' })
+        .then(function(r){
+            if (!r.ok) throw new Error('HTTP '+r.status);
+            return r.json().catch(function(){ return {}; });
         })
-        .then(r => {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json().catch(() => ({}));
-        })
-        .then(() => {
-            console.log('服务器 PB 已清空');
-            // 清空后刷新排行榜
-            loadLeaderboard();
-        })
-        .catch(err => {
+        .then(function(){ loadLeaderboard(); })
+        .catch(function(err){
             console.error('清空服务器 PB 失败:', err);
         });
     }
 }
-// --- 用这段代码替换原本的 startGame 函数 ---
-// 游戏开始逻辑
-function startGame(){
-    console.log("1. 按钮被点击了！准备开始...");
 
-    // 获取玩家名字
-    if(!playerName){
-        playerName = prompt("请输入你的昵称 (用于排行榜):", "Guest");
-        if(!playerName) playerName = "Guest";
-        localStorage.setItem('hmcl_playerName', playerName);
-    }
-    console.log("2. 玩家名字是:", playerName);
-
-    // 发送登录请求给服务器
-    if(typeof socket !== 'undefined'){
-        socket.emit('login', { username: playerName });
-        console.log("3. 已发送登录请求给服务器...");
-    } else {
-        console.warn("注意：Socket 未连接，将在单机模式下运行");
-    }
-
-    // 显示游戏画面
-    if(isMobile()) {
-        try { document.documentElement.requestFullscreen(); } catch(e) {}
-    }
-    console.log("4. 正在切换显示层...");
-    show('play'); // 切换到游戏画面
-
-    // 初始化游戏数据
-    track=makeTrack();
-    var stIdx = 5; 
-    var st=track[stIdx], nx=track[stIdx+5];
-    car={x:st.x, y:st.y, a:Math.atan2(nx.y-st.y,nx.x-st.x), s:0, vx:0, vy:0};
-    cam={x:car.x, y:car.y, zoom:0.4};
-    
-    // 重置全局变量
-    g.on=0; g.lap=0; g.progress=0; g.lastProgress=0; 
-    g.curSecTimes=[0,0,0]; g.currentSplitIdx=0;
-    
-    // 清理 UI 计时器
-    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts = [];
-    resetSectorUI();
-    
-    document.getElementById('lap').textContent='0';
-    document.getElementById('lapMsg').style.display='none';
-
-    console.log("5. 开始倒计时！");
-    countdown();
-}
-
-/*
-function startGame(){
-    if(isMobile()){ try{document.documentElement.requestFullscreen();}catch(e){} }
-    show('play'); 
-    track=makeTrack(); 
-    var stIdx=5; var st=track[stIdx], nx=track[stIdx+5]; 
-    car={x:st.x,y:st.y,a:Math.atan2(nx.y-st.y,nx.x-st.x),s:0,vx:0,vy:0}; 
-    cam={x:car.x,y:car.y,zoom:0.4}; 
-    g.on=0; g.lap=0; g.progress=0; g.lastProgress=0; g.curSecTimes=[0,0,0]; g.currentSplitIdx=0;
-    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts=[]; 
-    resetSectorUI(); 
-    document.getElementById('lap').textContent='0'; 
-    document.getElementById('lapMsg').style.display='none'; 
-    countdown(); 
-}
-*/
-function resetSectorUI() {
-    for(var i=1; i<=3; i++) {
-        var el = document.getElementById('s'+i+'-box');
-        var tm = document.getElementById('s'+i+'-time');
-        el.className = 'sec-box'; tm.textContent = '--.--';
-    }
-}
-
-function countdown(){
-    var el=document.getElementById('cd'); el.style.display='block';
-    var n=3; el.textContent=n;
-    var iv=setInterval(function(){
-        n--; 
-        if(n > 0) {
-            el.textContent = n;
-        } else if(n == 0) {
-            el.textContent = 'GO!';
-            el.style.color = '#0f0';
-        } else { 
-            // 比赛正式开始的逻辑
-            clearInterval(iv); 
-            el.style.display = 'none'; 
-            g.on = 1; 
-            g.st = Date.now(); 
-            g.lt = Date.now(); 
-            g.secStartTime = Date.now(); 
-            
-            // 下面这两行是关键修复
-            lastTime = performance.now(); 
-            requestAnimationFrame(loop); 
-        }
-    }, 800); // <--- 检查这里，必须有这个闭合括号和分号
-}
-
-var lastTime = 0; // 新增：用于记录上一帧的时间
-
-function loop(now){ 
-    if(!g.on) return; 
-    
-    if(!lastTime) lastTime = now;
-    var dt = (now - lastTime) / 16.667; 
-    if(dt > 2) dt = 2; 
-    lastTime = now;
-
-    update(dt); 
-    draw(); 
-    requestAnimationFrame(loop); 
-}
-
-function update(dt){
-    var ms=18; var ac=0.25; var br=0.4; var tr=0.06; var fr=0.01; var dr=0.96; 
-    
-    // 所有涉及速度增减、转向、位置移动的计算都要乘以 dt
-    if(keys.w) car.s = Math.min(car.s + ac * dt, ms);
-    if(keys.s) car.s = Math.max(car.s - br * dt, -ms * 0.3);
-    
-    if(!keys.w && !keys.s){ 
-        if(car.s > 0) car.s = Math.max(0, car.s - fr * dt); 
-        else car.s = Math.min(0, car.s + fr * dt); 
-    }
-    
-    var sr = Math.abs(car.s) / ms; 
-    var tf = 0.4 + sr * 0.6;
-    if(keys.a) car.a -= tr * tf * dt; 
-    if(keys.d) car.a += tr * tf * dt;
-    
-    var tx = Math.cos(car.a) * car.s, ty = Math.sin(car.a) * car.s;
-    
-    // 阻力/惯性平滑处理也需要考虑 dt
-    var dragFactor = Math.pow(dr, dt); 
-    car.vx = car.vx * dragFactor + tx * (1 - dragFactor); 
-    car.vy = car.vy * dragFactor + ty * (1 - dragFactor);
-    
-    car.x += car.vx * dt; 
-    car.y += car.vy * dt;
-    
-    // 后面关于轨道检测（md > tw）的部分逻辑保持不变，但移动补正需乘以 dt
-    var md=1e9,ni=0,np=null;
-    var startIdx = Math.floor(g.progress * track.length);
-    for(var j=-250; j<250; j++){
-        var idx = (startIdx + j + track.length) % track.length;
-        var pt=track[idx],d=Math.hypot(car.x-pt.x,car.y-pt.y);
-        if(d<md){md=d;ni=idx;np=pt;}
-    }
-    if(md>tw){ 
-        car.s *= Math.pow(0.85, dt); 
-        car.x += (np.x - car.x) * 0.2 * dt; 
-        car.y += (np.y - car.y) * 0.2 * dt; 
-    }
-    
-    // 进度和计时逻辑保持不变
-    g.lastProgress=g.progress; g.progress=ni/track.length;
-    var curIdx = ni, prevIdx = Math.floor(g.lastProgress * track.length);
-    for(var i=0; i<2; i++) {
-        var sp = g.splitIndices[i];
-        if(g.currentSplitIdx == i && curIdx >= sp && prevIdx < sp) recordSector(i);
-    }
-    
-    if (g.lastProgress > 0.9 && g.progress < 0.1) {
-        var lapTime = Date.now() - g.lt;
-    
-        recordSector(2);
-        g.lap++;
-        document.getElementById('lap').textContent = g.lap;
-        showLapTime(g.lap, lapTime);
-    
-        if (lapTime < g.pb.lap) {
-            // 更新本地 PB
-            g.pb = {
-                lap: lapTime,
-                s1: g.curSecTimes[0],
-                s2: g.curSecTimes[1],
-                s3: g.curSecTimes[2]
-            };
-            localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
-    
-            // 上传到排行榜（注意这里用完整 URL）
-            fetch('https://mt1-expressway.onrender.com/api/leaderboard', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: playerName,
-                    lap: g.pb.lap,
-                    s1: g.pb.s1,
-                    s2: g.pb.s2,
-                    s3: g.pb.s3
-                })
-            })
-            .then(r => {
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.json().catch(() => ({}));
-            })
-            .then(() => {
-                loadLeaderboard();   // 上传成功后刷新排行榜显示
-            })
-            .catch(err => {
-                console.error('上传排行榜失败:', err);
-            });
-        }
-    
-        setTimeout(endGame, 2000);
-    }
-    
-    cam.x += (car.x - cam.x) * 0.1 * dt; 
-    cam.y += (car.y - cam.y) * 0.1 * dt;
-    if (mpState.inRoom && g.on) {
-    socket.emit('race:pos', {
-        roomId: mpState.roomId,
-        x: car.x,
-        y: car.y,
-        a: car.a,
-        progress: g.progress,
-        lap: g.lap
-    });
-    document.getElementById('time').textContent=fmt(Date.now()-g.st);
-    document.getElementById('speed').textContent=Math.round(Math.hypot(car.vx,car.vy)*25);
-}
-
-function recordSector(secIdx) {
-    var now = Date.now();
-    var secTime = now - g.secStartTime;
-    g.curSecTimes[secIdx] = secTime;
-    g.secStartTime = now;
-    g.currentSplitIdx = secIdx + 1;
-    updateSectorUI(secIdx, secTime);
-}
-
-function updateSectorUI(secIdx, time) {
-    var elBox = document.getElementById('s'+(secIdx+1)+'-box');
-    var elTime = document.getElementById('s'+(secIdx+1)+'-time');
-    elTime.textContent = (time/1000).toFixed(2);
-    var pbSec = (secIdx==0?g.pb.s1:(secIdx==1?g.pb.s2:g.pb.s3));
-    
-    elBox.className = 'sec-box';
-    if(pbSec) {
-        if(time < pbSec) elBox.classList.add('purple');
-        else elBox.classList.add('yellow');
-        var diff = time - pbSec;
-        var diffStr = (diff > 0 ? '+' : '-') + (Math.abs(diff)/1000).toFixed(2);
-        var t = setTimeout(function() { elTime.textContent = diffStr; }, 1500);
-        g.uiTimeouts.push(t);
-    } else {
-        elBox.classList.add('green'); 
-    }
-}
-
-function showLapTime(lapNum,time){
-    var el=document.getElementById('lapMsg');
-    el.innerHTML='FINISH!<br>'+(time/1000).toFixed(3)+'s';
-    el.style.display='block';
-}
-
-function draw(){
-    // 背景
-    c.fillStyle = '#000';
-    c.fillRect(0, 0, 1000, 700);
-
-    c.save();                      // 整个世界的变换
-    c.translate(500, 350);
-
-    // 相机模式
-    if (cfg.camMode === 1) {
-        // follow
-        c.rotate(-car.a - Math.PI/2);
-        c.scale(cam.zoom, cam.zoom);
-        c.translate(-car.x, -car.y);
-    } else {
-        // standard
-        c.scale(cam.zoom, cam.zoom);
-        c.translate(-cam.x, -cam.y);
-    }
-
-    // 赛道
-    c.strokeStyle = '#fff';
-    c.lineWidth = (tw + 15) * 2;
-    c.lineCap = 'round';
-    c.lineJoin = 'round';
-    c.beginPath();
-    track.forEach((p, i) => i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y));
-    c.closePath();
-    c.stroke();
-
-    c.strokeStyle = '#222';
-    c.lineWidth = tw * 2;
-    c.stroke();
-
-    c.strokeStyle = '#444';
-    c.lineWidth = 4;
-    c.setLineDash([80, 80]);
-    c.stroke();
-    c.setLineDash([]);
-
-    // 分段线
-    g.splitIndices.forEach(idx => {
-        var sp = track[idx], pr = track[idx - 1];
-        c.save();
-        c.translate(sp.x, sp.y);
-        c.rotate(Math.atan2(sp.y - pr.y, sp.x - pr.x));
-        c.fillStyle = 'rgba(255,255,0,0.5)';
-        c.fillRect(-5, -tw, 10, tw * 2);
-        c.restore();
-    });
-
-    // 起终点棋盘格
-    var s0 = track[0], s1 = track[1];
-    c.save();
-    c.translate(s0.x, s0.y);
-    c.rotate(Math.atan2(s1.y - s0.y, s1.x - s0.x));
-    c.fillStyle = '#fff';
-    c.fillRect(0, -tw, 200, tw * 2);
-    c.fillStyle = '#000';
-    for (var r = 0; r < 12; r++)
-        for (var cl = 0; cl < 5; cl++)
-            if ((r + cl) % 2 === 0)
-                c.fillRect(cl * 40, -tw + r * 44, 40, 44);
-    c.restore();
-
-    // 自己的车
-    c.save();
-    c.translate(car.x, car.y);
-    c.rotate(car.a);
-    c.shadowColor = '#00f0ff';
-    c.shadowBlur = 20;
-    c.fillStyle = '#00f0ff';
-    c.beginPath();
-    c.moveTo(50, 0);
-    c.lineTo(-30, 25);
-    c.lineTo(-30, -25);
-    c.fill();
-    c.fillStyle = '#000';
-    c.fillRect(-20, -10, 20, 20);
-    c.restore();
-
-    // 其他玩家的“虚影车”
-    if (mpState.inRoom) {
-        Object.keys(mpState.players).forEach(id => {
-            if (id === mpState.myId) return;
-            var p = mpState.players[id];
-            if (!p.car) return;
-
-            // 车影
-            c.save();
-            c.translate(p.car.x, p.car.y);
-            c.rotate(p.car.a);
-            c.globalAlpha = 0.5;
-            c.fillStyle = '#ff00ff';
-            c.beginPath();
-            c.moveTo(50, 0);
-            c.lineTo(-30, 25);
-            c.lineTo(-30, -25);
-            c.fill();
-            c.fillStyle = '#000';
-            c.fillRect(-20, -10, 20, 20);
-            c.restore();
-
-            // 名字（世界坐标直接画）
-            c.save();
-            c.fillStyle = '#fff';
-            c.font = '16px sans-serif';
-            c.textAlign = 'center';
-            c.fillText(p.name || 'P', p.car.x, p.car.y - 40);
-            c.restore();
-        });
-    }
-
-    c.restore();      // 对应最外层 c.save()
-    drawMiniMap();
-}
-
-function drawMiniMap(){
-    mc.fillStyle='rgba(0,0,0,0.8)'; mc.fillRect(0,0,200,200);
-    var mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
-    track.forEach(p=>{ mnx=Math.min(mnx,p.x); mxx=Math.max(mxx,p.x); mny=Math.min(mny,p.y); mxy=Math.max(mxy,p.y); });
-    var sc=160/Math.max(mxx-mnx, mxy-mny);
-    mc.strokeStyle='#555'; mc.lineWidth=4; mc.beginPath();
-    track.forEach((p,i)=>i==0?mc.moveTo((p.x-mnx)*sc+20,(p.y-mny)*sc+20):mc.lineTo((p.x-mnx)*sc+20,(p.y-mny)*sc+20));
-    mc.stroke();
-    var cx=(car.x-mnx)*sc+20, cy=(car.y-mny)*sc+20;
-    mc.fillStyle='#00f0ff'; mc.beginPath(); mc.arc(cx,cy,4,0,Math.PI*2); mc.fill();
-}
-
-function endGame(){
-    g.on=0;
-    var lt = Date.now()-g.lt;
-    var res = document.getElementById('end-result');
-    res.innerHTML = `TIME: ${fmt(lt)}`;
-    if(lt <= g.pb.lap) res.innerHTML += `<br><span style="color:var(--purple)">NEW PERSONAL BEST!</span>`;
-    show('end');
-}
-
-function fmt(ms){
-    var m=Math.floor(ms/60000); var s=Math.floor(ms%60000/1000); var l=ms%1000;
-    return (m<10?'0':'')+m+':'+(s<10?'0':'')+s+'.'+(l<100?'0':'')+(l<10?'0':'')+l;
-}
-// 修复排行榜返回按钮卡死
-function closeLB() {
-    const lb = document.getElementById('leaderboard-layer');
-    if (lb) {
-        lb.style.display = 'none';
-    }
-}
-
-var playerName = localStorage.getItem('hmcl_playerName') || '';
-
-function handleAuth() {
+// ===== 登录与页面切换 =====
+function handleAuth(){
     console.log('点击登录按钮');
     var uInput = document.getElementById('login-username');
     var pInput = document.getElementById('login-password');
     if (!uInput || !pInput) {
-        console.error('找不到登录输入框 login-username / login-password');
-        alert('页面结构有问题：找不到登录输入框');
+        alert('找不到登录输入框');
         return;
     }
     var username = (uInput.value || '').trim();
@@ -941,248 +410,650 @@ function handleAuth() {
     }
     playerName = username;
     localStorage.setItem('hmcl_playerName', playerName);
-
-    if (typeof socket !== 'undefined') {
-        socket.emit('login', { username, password });
-        console.log('已发送 login 事件给服务器');
-    }
+    socket.emit('login', { username: username, password: password });
+    console.log('已发送 login 事件给服务器');
     show('menu');
 }
 
-/* ===================== 多人状态 ===================== */
+function closeLB(){
+    var lb = document.getElementById('leaderboard-layer');
+    if (lb) lb.style.display = 'none';
+}
 
-var mpState = {
-    inRoom: false,
-    roomId: null,
-    isOwner: false,
-    maxPlayers: 4,
-    laps: 3,
-    password: '',
-    players: {},     // { socketId: { name, car, progress, lap } }
-    myId: null
-};
+// ===== 赛道与游戏逻辑 =====
+function makeTrack(){
+    var p = [], x=0, y=0, a=0, splits=[];
+    function addSeg(type, val1, val2, val3){
+        if (type==='s'){
+            var st = Math.ceil(val1/50);
+            for(var j=0;j<st;j++){
+                p.push({x:x,y:y,a:a});
+                x+=Math.cos(a)*50;
+                y+=Math.sin(a)*50;
+            }
+        }else{
+            var arc=val1*Math.abs(val2);
+            var st2=Math.ceil(arc/40);
+            var da=val2/st2*val3;
+            for(var k=0;k<st2;k++){
+                p.push({x:x,y:y,a:a});
+                a+=da;
+                x+=Math.cos(a)*40;
+                y+=Math.sin(a)*40;
+            }
+        }
+    }
+    addSeg('s',2500);
+    addSeg('c',600,Math.PI*0.6,-1);
+    addSeg('s',400);
+    addSeg('c',400,Math.PI*0.4,-1);
+    addSeg('s',600);
+    addSeg('c',400,Math.PI*0.3,1);
+    addSeg('s',800);
+    splits.push(p.length); // S1
 
-/* ===================== Socket 初始化 ===================== */
+    addSeg('c',500,Math.PI*0.4,-1);
+    addSeg('s',1500);
+    addSeg('c',400,Math.PI*1.05,1);
+    addSeg('s',600);
+    addSeg('c',400,Math.PI*0.9,-1);
+    addSeg('s',1200);
+    addSeg('c',500,Math.PI*0.3,1);
+    addSeg('s',800);
+    splits.push(p.length); // S2
 
-var socket = io("https://mt1-expressway.onrender.com", {
-    transports: ['websocket', 'polling']
-});
+    addSeg('c',600,Math.PI*0.5,-1);
+    addSeg('s',3000);
+    addSeg('c',700,Math.PI*0.5,-1);
+    addSeg('s',5500);
+    addSeg('c',700,Math.PI*0.5,-1);
 
-socket.on("connect", () => {
-    console.log("已成功连接到服务器！ID:", socket.id);
-    mpState.myId = socket.id;
-});
+    var sx=0, sy=0;
+    var lp=p[p.length-1];
+    var dist=Math.hypot(sx-lp.x,sy-lp.y);
+    var cls=Math.ceil(dist/50);
+    for(var i=1;i<=cls;i++){
+        var t=i/cls, t2=t*t*(3-2*t);
+        p.push({
+            x: lp.x+(sx-lp.x)*t2,
+            y: lp.y+(sy-lp.y)*t2,
+            a: a+(0-a)*t
+        });
+    }
+    g.splitIndices = splits;
+    return p;
+}
 
-/* ===================== 多人房间 UI 相关 ===================== */
+function resetSectorUI(){
+    for(var i=1;i<=3;i++){
+        var box  = document.getElementById('s'+i+'-box');
+        var time = document.getElementById('s'+i+'-time');
+        if (!box || !time) continue;
+        box.className = 'sec-box';
+        time.textContent = '--.--';
+    }
+}
 
-function showMultiplayer() {
-    document.getElementById('mp-status').textContent = '';
-    document.getElementById('mp-player-list').innerHTML = '';
-    document.getElementById('mp-owner-controls').style.display = 'none';
+function recordSector(secIdx){
+    var now = Date.now();
+    var secTime = now - g.secStartTime;
+    g.curSecTimes[secIdx] = secTime;
+    g.secStartTime = now;
+    g.currentSplitIdx = secIdx + 1;
+    updateSectorUI(secIdx, secTime);
+}
+
+function updateSectorUI(secIdx,time){
+    var box  = document.getElementById('s'+(secIdx+1)+'-box');
+    var el   = document.getElementById('s'+(secIdx+1)+'-time');
+    if (!box || !el) return;
+    el.textContent = (time/1000).toFixed(2);
+    var pbSec = (secIdx===0?g.pb.s1:(secIdx===1?g.pb.s2:g.pb.s3));
+    box.className = 'sec-box';
+    if (pbSec < Infinity){
+        if (time < pbSec) box.classList.add('purple');
+        else              box.classList.add('yellow');
+        var diff = time - pbSec;
+        var diffStr = (diff>0?'+':'-') + (Math.abs(diff)/1000).toFixed(2);
+        var t = setTimeout(function(){ el.textContent = diffStr; },1500);
+        g.uiTimeouts.push(t);
+    }else{
+        box.classList.add('green');
+    }
+}
+
+function showLapTime(lapNum,time){
+    var el = document.getElementById('lapMsg');
+    if (!el) return;
+    el.innerHTML = 'FINISH!<br>'+(time/1000).toFixed(3)+'s';
+    el.style.display = 'block';
+}
+
+function endGame(){
+    g.on = 0;
+    var lt = Date.now() - g.lt;
+    var res = document.getElementById('end-result');
+    if (res){
+        res.innerHTML = 'TIME: '+fmt(lt);
+        if (lt <= g.pb.lap)
+            res.innerHTML += '<br><span style="color:var(--purple)">NEW PERSONAL BEST!</span>';
+    }
+    show('end');
+}
+
+function countdown(){
+    var el = document.getElementById('cd');
+    if (!el) { g.on=1; g.st=g.lt=g.secStartTime=Date.now(); lastTime=performance.now(); requestAnimationFrame(loop); return; }
+    el.style.display='block';
+    el.style.color='#fff';
+    var n=3;
+    el.textContent=n;
+    var iv=setInterval(function(){
+        n--;
+        if (n>0){
+            el.textContent=n;
+        }else if(n===0){
+            el.textContent='GO!';
+            el.style.color='#0f0';
+        }else{
+            clearInterval(iv);
+            el.style.display='none';
+            g.on=1;
+            g.st=g.lt=g.secStartTime=Date.now();
+            lastTime=performance.now();
+            requestAnimationFrame(loop);
+        }
+    },800);
+}
+
+// ===== 游戏主循环 =====
+function loop(now){
+    if (!g.on) return;
+    if (!lastTime) lastTime = now;
+    var dt = (now-lastTime)/16.667;
+    if (dt>2) dt=2;
+    lastTime = now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+}
+
+function update(dt){
+    // 车辆物理
+    var ms=18, ac=0.25, br=0.4, tr=0.06, fr=0.01, dr=0.96;
+
+    if (keys.w) car.s = Math.min(car.s + ac*dt, ms);
+    if (keys.s) car.s = Math.max(car.s - br*dt, -ms*0.3);
+
+    if (!keys.w && !keys.s){
+        if (car.s>0) car.s = Math.max(0,  car.s - fr*dt);
+        else         car.s = Math.min(0,  car.s + fr*dt);
+    }
+
+    var sr = Math.abs(car.s)/ms;
+    var tf = 0.4 + sr*0.6;
+    if (keys.a) car.a -= tr*tf*dt;
+    if (keys.d) car.a += tr*tf*dt;
+
+    var tx = Math.cos(car.a)*car.s;
+    var ty = Math.sin(car.a)*car.s;
+    var dragFactor = Math.pow(dr,dt);
+    car.vx = car.vx*dragFactor + tx*(1-dragFactor);
+    car.vy = car.vy*dragFactor + ty*(1-dragFactor);
+    car.x += car.vx*dt;
+    car.y += car.vy*dt;
+
+    // 吸附到赛道
+    var md=1e9, ni=0, np=null;
+    var startIdx = Math.floor(g.progress*track.length);
+    for(var j=-250;j<250;j++){
+        var idx = (startIdx+j+track.length)%track.length;
+        var pt = track[idx];
+        var d = Math.hypot(car.x-pt.x, car.y-pt.y);
+        if (d<md){ md=d; ni=idx; np=pt; }
+    }
+    if (np && md>tw){
+        car.s *= Math.pow(0.85,dt);
+        car.x += (np.x-car.x)*0.2*dt;
+        car.y += (np.y-car.y)*0.2*dt;
+    }
+
+    g.lastProgress = g.progress;
+    g.progress = ni/track.length;
+
+    var curIdx  = ni;
+    var prevIdx = Math.floor(g.lastProgress*track.length);
+    for (var sIdx=0;sIdx<2;sIdx++){
+        var sp = g.splitIndices[sIdx];
+        if (g.currentSplitIdx===sIdx && curIdx>=sp && prevIdx<sp)
+            recordSector(sIdx);
+    }
+
+    if (g.lastProgress>0.9 && g.progress<0.1){
+        var lapTime = Date.now()-g.lt;
+        recordSector(2);
+        g.lap++;
+        var lapEl = document.getElementById('lap');
+        if (lapEl) lapEl.textContent = g.lap;
+        showLapTime(g.lap, lapTime);
+
+        if (lapTime < g.pb.lap){
+            g.pb = {
+                lap: lapTime,
+                s1: g.curSecTimes[0],
+                s2: g.curSecTimes[1],
+                s3: g.curSecTimes[2]
+            };
+            localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
+
+            fetch('https://mt1-expressway.onrender.com/api/leaderboard', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    name:playerName,
+                    lap:g.pb.lap,
+                    s1:g.pb.s1,
+                    s2:g.pb.s2,
+                    s3:g.pb.s3
+                })
+            }).then(function(r){
+                if(!r.ok) throw new Error('HTTP '+r.status);
+                return r.json().catch(function(){ return {}; });
+            }).then(function(){ loadLeaderboard(); })
+            .catch(function(err){ console.error('上传排行榜失败:',err); });
+        }
+
+        if (g.lap >= cfg.laps){
+            setTimeout(endGame,2000);
+        }else{
+            g.lt = Date.now();
+            g.secStartTime = Date.now();
+            g.currentSplitIdx = 0;
+            g.curSecTimes = [0,0,0];
+        }
+    }
+
+    cam.x += (car.x-cam.x)*0.1*dt;
+    cam.y += (car.y-cam.y)*0.1*dt;
+
+    var timeEl  = document.getElementById('time');
+    var speedEl = document.getElementById('speed');
+    if (timeEl)  timeEl.textContent  = fmt(Date.now()-g.st);
+    if (speedEl) speedEl.textContent = Math.round(Math.hypot(car.vx,car.vy)*25);
+
+    // 向服务器同步自己位置
+    if (mpState.inRoom && g.on){
+        socket.emit('race:pos',{
+            roomId: mpState.roomId,
+            x: car.x, y: car.y, a: car.a,
+            progress: g.progress,
+            lap: g.lap
+        });
+    }
+}
+
+function draw(){
+    c.fillStyle='#000';
+    c.fillRect(0,0,1000,700);
+
+    c.save();
+    c.translate(500,350);
+    if (cfg.camMode===1){
+        c.rotate(-car.a-Math.PI/2);
+        c.scale(cam.zoom,cam.zoom);
+        c.translate(-car.x,-car.y);
+    }else{
+        c.scale(cam.zoom,cam.zoom);
+        c.translate(-cam.x,-cam.y);
+    }
+
+    c.strokeStyle='#fff';
+    c.lineWidth = (tw+15)*2;
+    c.lineCap='round';
+    c.lineJoin='round';
+    c.beginPath();
+    track.forEach(function(p,i){
+        if (i===0) c.moveTo(p.x,p.y);
+        else       c.lineTo(p.x,p.y);
+    });
+    c.closePath();
+    c.stroke();
+
+    c.strokeStyle='#222';
+    c.lineWidth=tw*2;
+    c.stroke();
+
+    c.strokeStyle='#444';
+    c.lineWidth=4;
+    c.setLineDash([80,80]);
+    c.stroke();
+    c.setLineDash([]);
+
+    g.splitIndices.forEach(function(idx){
+        var sp = track[idx], pr = track[idx-1];
+        c.save();
+        c.translate(sp.x,sp.y);
+        c.rotate(Math.atan2(sp.y-pr.y, sp.x-pr.x));
+        c.fillStyle='rgba(255,255,0,0.5)';
+        c.fillRect(-5,-tw,10,tw*2);
+        c.restore();
+    });
+
+    var s0=track[0], s1=track[1];
+    c.save();
+    c.translate(s0.x,s0.y);
+    c.rotate(Math.atan2(s1.y-s0.y,s1.x-s0.x));
+    c.fillStyle='#fff';
+    c.fillRect(0,-tw,200,tw*2);
+    c.fillStyle='#000';
+    for (var r=0;r<12;r++)
+        for (var cl=0;cl<5;cl++)
+            if ((r+cl)%2===0)
+                c.fillRect(cl*40, -tw+r*44, 40, 44);
+    c.restore();
+
+    // 自己的车
+    c.save();
+    c.translate(car.x,car.y);
+    c.rotate(car.a);
+    c.shadowColor='#00f0ff';
+    c.shadowBlur=20;
+    c.fillStyle='#00f0ff';
+    c.beginPath();
+    c.moveTo(50,0);
+    c.lineTo(-30,25);
+    c.lineTo(-30,-25);
+    c.fill();
+    c.fillStyle='#000';
+    c.fillRect(-20,-10,20,20);
+    c.restore();
+
+    // 其他玩家的虚影车
+    if (mpState.inRoom){
+        Object.keys(mpState.players).forEach(function(id){
+            if (id===mpState.myId) return;
+            var p = mpState.players[id];
+            if (!p.car) return;
+
+            c.save();
+            c.translate(p.car.x,p.car.y);
+            c.rotate(p.car.a);
+            c.globalAlpha=0.5;
+            c.fillStyle='#ff00ff';
+            c.beginPath();
+            c.moveTo(50,0);
+            c.lineTo(-30,25);
+            c.lineTo(-30,-25);
+            c.fill();
+            c.fillStyle='#000';
+            c.fillRect(-20,-10,20,20);
+            c.restore();
+
+            c.save();
+            c.globalAlpha=1;
+            c.fillStyle='#fff';
+            c.font='16px sans-serif';
+            c.textAlign='center';
+            c.fillText(p.name || 'P', p.car.x, p.car.y-40);
+            c.restore();
+        });
+    }
+
+    c.restore();
+    drawMiniMap();
+}
+
+function drawMiniMap(){
+    mc.fillStyle='rgba(0,0,0,0.8)';
+    mc.fillRect(0,0,200,200);
+    if (!track.length) return;
+    var mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+    track.forEach(function(p){
+        mnx=Math.min(mnx,p.x); mxx=Math.max(mxx,p.x);
+        mny=Math.min(mny,p.y); mxy=Math.max(mxy,p.y);
+    });
+    var sc = 160/Math.max(mxx-mnx, mxy-mny);
+    mc.strokeStyle='#555';
+    mc.lineWidth=4;
+    mc.beginPath();
+    track.forEach(function(p,i){
+        var x=(p.x-mnx)*sc+20,
+            y=(p.y-mny)*sc+20;
+        if (i===0) mc.moveTo(x,y);
+        else       mc.lineTo(x,y);
+    });
+    mc.stroke();
+
+    var cx=(car.x-mnx)*sc+20,
+        cy=(car.y-mny)*sc+20;
+    mc.fillStyle='#00f0ff';
+    mc.beginPath();
+    mc.arc(cx,cy,4,0,Math.PI*2);
+    mc.fill();
+}
+
+// ===== 单人开始游戏 =====
+function startGame(){
+    if (!playerName){
+        playerName = prompt("请输入你的昵称 (用于排行榜):","Guest") || "Guest";
+        localStorage.setItem('hmcl_playerName', playerName);
+    }
+    socket.emit('login',{ username: playerName });
+    if (isMobile()){
+        try { document.documentElement.requestFullscreen(); } catch(e){}
+    }
+    show('play');
+    track = makeTrack();
+    var stIdx=5,
+        st   = track[stIdx],
+        nx   = track[stIdx+5];
+    car = {
+        x: st.x,
+        y: st.y,
+        a: Math.atan2(nx.y-st.y, nx.x-st.x),
+        s:0, vx:0, vy:0
+    };
+    cam = { x:car.x, y:car.y, zoom:0.4 };
+    g.on=0; g.lap=0;
+    g.progress=0; g.lastProgress=0;
+    g.curSecTimes=[0,0,0];
+    g.currentSplitIdx=0;
+    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts=[];
+    resetSectorUI();
+    var lapEl = document.getElementById('lap');
+    if (lapEl) lapEl.textContent='0';
+    var lapMsg = document.getElementById('lapMsg');
+    if (lapMsg) lapMsg.style.display='none';
+    countdown();
+}
+
+// ===== 多人房间与同步 =====
+function showMultiplayer(){
+    var st = document.getElementById('mp-status');
+    var pl = document.getElementById('mp-player-list');
+    var oc = document.getElementById('mp-owner-controls');
+    if (st) st.textContent='';
+    if (pl) pl.innerHTML='';
+    if (oc) oc.style.display='none';
     show('multiplayer');
 }
 
-function createRoom() {
-    var roomName = document.getElementById('mp-room-name').value.trim() || ('room-' + Math.floor(Math.random()*10000));
-    var maxPlayers = parseInt(document.getElementById('mp-max-players').value, 10) || 4;
-    var laps = parseInt(document.getElementById('mp-laps').value, 10) || 3;
-    var password = document.getElementById('mp-password').value || '';
+function createRoom(){
+    var roomName = (document.getElementById('mp-room-name').value || '').trim() ||
+                   ('room-'+Math.floor(Math.random()*10000));
+    var maxPlayers = parseInt(document.getElementById('mp-max-players').value,10) || 4;
+    var laps       = parseInt(document.getElementById('mp-laps').value,10) || 3;
+    var password   = document.getElementById('mp-password').value || '';
+    maxPlayers = Math.max(2,Math.min(8,maxPlayers));
 
-    maxPlayers = Math.max(2, Math.min(8, maxPlayers));
+    mpState.roomId    = roomName;
+    mpState.maxPlayers= maxPlayers;
+    mpState.laps      = laps;
+    mpState.password  = password;
+    mpState.isOwner   = true;
 
-    mpState.roomId = roomName;
-    mpState.maxPlayers = maxPlayers;
-    mpState.laps = laps;
-    mpState.password = password;
-    mpState.isOwner = true;
-
-    socket.emit('room:create', {
-        roomId: roomName,
-        maxPlayers,
-        laps,
-        password,
-        name: playerName
+    socket.emit('room:create',{
+        roomId:roomName,
+        maxPlayers:maxPlayers,
+        laps:laps,
+        password:password,
+        name:playerName
     });
 
-    document.getElementById('mp-status').textContent = '正在创建房间...';
+    var st = document.getElementById('mp-status');
+    if (st) st.textContent='正在创建房间...';
 }
 
-function joinRoom() {
-    var roomName = document.getElementById('mp-room-name').value.trim();
-    if (!roomName) {
-        alert('请输入房间名');
-        return;
-    }
+function joinRoom(){
+    var roomName = (document.getElementById('mp-room-name').value || '').trim();
+    if (!roomName){ alert('请输入房间名'); return; }
     var password = document.getElementById('mp-password').value || '';
-
-    mpState.roomId = roomName;
+    mpState.roomId  = roomName;
     mpState.isOwner = false;
-
-    socket.emit('room:join', {
-        roomId: roomName,
-        password,
-        name: playerName
+    socket.emit('room:join',{
+        roomId:roomName,
+        password:password,
+        name:playerName
     });
-
-    document.getElementById('mp-status').textContent = '正在加入房间...';
+    var st = document.getElementById('mp-status');
+    if (st) st.textContent='正在加入房间...';
 }
 
-/* 房间信息更新 */
-
-socket.on('room:update', (info) => {
-    // info: { roomId, players: [{id,name}], ownerId, maxPlayers, laps }
-    mpState.inRoom = true;
-    mpState.roomId = info.roomId;
-    mpState.maxPlayers = info.maxPlayers;
-    mpState.laps = info.laps;
-    mpState.players = {};
-
-    info.players.forEach(p => {
-        mpState.players[p.id] = { name: p.name, car: null, progress: 0, lap: 0 };
+socket.on('room:update', function(info){
+    mpState.inRoom    = true;
+    mpState.roomId    = info.roomId;
+    mpState.maxPlayers= info.maxPlayers;
+    mpState.laps      = info.laps;
+    mpState.players   = {};
+    info.players.forEach(function(p){
+        mpState.players[p.id] = { name:p.name, car:null, progress:0, lap:0 };
     });
 
-    var listHtml = '房间ID: ' + info.roomId +
-        '<br>圈数: ' + info.laps +
-        '<br>人数: ' + info.players.length + ' / ' + info.maxPlayers +
+    var listHtml = '房间ID: '+info.roomId+
+        '<br>圈数: '+info.laps+
+        '<br>人数: '+info.players.length+' / '+info.maxPlayers+
         '<br><br>玩家列表:<br>';
-
-    info.players.forEach(p => {
-        var mark = (p.id === info.ownerId) ? ' (房主)' : '';
-        listHtml += '- ' + p.name + mark + '<br>';
+    info.players.forEach(function(p){
+        var mark = (p.id===info.ownerId)?' (房主)':'';
+        listHtml += '- '+p.name+mark+'<br>';
     });
+    var pl = document.getElementById('mp-player-list');
+    if (pl) pl.innerHTML = listHtml;
 
-    document.getElementById('mp-player-list').innerHTML = listHtml;
-    document.getElementById('mp-status').textContent = '已进入房间';
+    var st = document.getElementById('mp-status');
+    if (st) st.textContent='已进入房间';
 
     mpState.isOwner = (info.ownerId === mpState.myId);
-    document.getElementById('mp-owner-controls').style.display = mpState.isOwner ? 'block' : 'none';
+    var oc = document.getElementById('mp-owner-controls');
+    if (oc) oc.style.display = mpState.isOwner ? 'block' : 'none';
 });
 
-socket.on('room:error', (msg) => {
-    mpState.inRoom = false;
-    document.getElementById('mp-status').textContent = '错误：' + msg;
+socket.on('room:error', function(msg){
+    mpState.inRoom=false;
+    var st = document.getElementById('mp-status');
+    if (st) st.textContent='错误：'+msg;
 });
 
-socket.on('room:left', () => {
-    mpState.inRoom = false;
-    mpState.roomId = null;
-    mpState.players = {};
-    document.getElementById('mp-status').textContent = '已离开房间';
-    document.getElementById('mp-player-list').innerHTML = '';
-    document.getElementById('mp-owner-controls').style.display = 'none';
+socket.on('room:left', function(){
+    mpState.inRoom=false;
+    mpState.roomId=null;
+    mpState.players={};
+    var st = document.getElementById('mp-status');
+    var pl = document.getElementById('mp-player-list');
+    var oc = document.getElementById('mp-owner-controls');
+    if (st) st.textContent='已离开房间';
+    if (pl) pl.innerHTML='';
+    if (oc) oc.style.display='none';
 });
 
-/* 房主开始比赛 */
-
-function startMultiplayerRace() {
+function startMultiplayerRace(){
     if (!mpState.inRoom || !mpState.isOwner) return;
-
-    socket.emit('race:start', {
-        roomId: mpState.roomId,
-        laps: mpState.laps
-    });
+    socket.emit('race:start',{ roomId:mpState.roomId, laps:mpState.laps });
 }
 
-/* ===================== 比赛开始事件 ===================== */
-
-socket.on('race:start', (data) => {
-    console.log('多人比赛开始!', data);
-
-    // 切到游戏画面，不启用单人 startGame
-    if (isMobile()) {
-        try { document.documentElement.requestFullscreen(); } catch(e) {}
+socket.on('race:start', function(data){
+    console.log('多人比赛开始!',data);
+    if (isMobile()){
+        try{ document.documentElement.requestFullscreen(); }catch(e){}
     }
     show('play');
-
-    // 初始化赛道和自己的车
     track = makeTrack();
-    var stIdx = 5;
-    var st = track[stIdx], nx = track[stIdx+5];
+    var stIdx=5,
+        st   = track[stIdx],
+        nx   = track[stIdx+5];
+    var baseAngle = Math.atan2(nx.y-st.y, nx.x-st.x);
 
-    // 并排起跑：根据 data.players 顺序给每个人分车位
-    // data.players: [{ id, name, slot }]
-    var mySlot = 0;
-    data.players.forEach(p => {
-        if (p.id === mpState.myId) mySlot = p.slot;
-        mpState.players[p.id] = mpState.players[p.id] || { name: p.name, car: null, progress: 0, lap: 0 };
-    });
-
-    // 偏移：同一条线上左右排开，两排时上下略微错开
-    function slotToOffset(slot) {
-        var row = Math.floor(slot / 4);      // 每排最多4人
-        var col = slot % 4;                  // 0..3
-        var sideways = (col - 1.5) * 60;     // 左右
-        var forward = -row * 80;             // 第二排稍微靠后
-        return { sideways, forward };
+    function slotToOffset(slot){
+        var row = Math.floor(slot/4);
+        var col = slot%4;
+        var sideways = (col-1.5)*60;
+        var forward  = -row*80;
+        return { sideways:sideways, forward:forward };
     }
 
+    var mySlot=0;
+    data.players.forEach(function(p){
+        if (p.id===mpState.myId) mySlot=p.slot;
+        mpState.players[p.id] = mpState.players[p.id] ||
+            { name:p.name, car:null, progress:0, lap:0 };
+    });
+
     var o = slotToOffset(mySlot);
-    var baseAngle = Math.atan2(nx.y - st.y, nx.x - st.x);
-
     car = {
-        x: st.x + Math.cos(baseAngle + Math.PI/2) * o.sideways + Math.cos(baseAngle) * o.forward,
-        y: st.y + Math.sin(baseAngle + Math.PI/2) * o.sideways + Math.sin(baseAngle) * o.forward,
+        x: st.x + Math.cos(baseAngle+Math.PI/2)*o.sideways +
+                 Math.cos(baseAngle)*o.forward,
+        y: st.y + Math.sin(baseAngle+Math.PI/2)*o.sideways +
+                 Math.sin(baseAngle)*o.forward,
         a: baseAngle,
-        s: 0, vx: 0, vy: 0
+        s:0, vx:0, vy:0
     };
-    cam = { x: car.x, y: car.y, zoom: 0.4 };
+    cam = { x:car.x, y:car.y, zoom:0.4 };
 
-    // 房间里其他玩家车对象初始化
-    data.players.forEach(p => {
-        if (p.id === mpState.myId) return;
+    data.players.forEach(function(p){
+        if (p.id===mpState.myId) return;
         var so = slotToOffset(p.slot);
         mpState.players[p.id].car = {
-            x: st.x + Math.cos(baseAngle + Math.PI/2) * so.sideways + Math.cos(baseAngle) * so.forward,
-            y: st.y + Math.sin(baseAngle + Math.PI/2) * so.sideways + Math.sin(baseAngle) * so.forward,
+            x: st.x + Math.cos(baseAngle+Math.PI/2)*so.sideways +
+                     Math.cos(baseAngle)*so.forward,
+            y: st.y + Math.sin(baseAngle+Math.PI/2)*so.sideways +
+                     Math.sin(baseAngle)*so.forward,
             a: baseAngle
         };
     });
 
-    // 比赛状态
-    g.on = 1;
-    g.st = Date.now();
-    g.lt = Date.now();
-    g.lap = 0;
-    g.progress = 0;
-    g.lastProgress = 0;
-    g.curSecTimes = [0,0,0];
-    g.currentSplitIdx = 0;
-    g.secStartTime = Date.now();
-    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts = [];
+    g.on=1;
+    g.st=g.lt=g.secStartTime=Date.now();
+    g.lap=0;
+    g.progress=0; g.lastProgress=0;
+    g.curSecTimes=[0,0,0];
+    g.currentSplitIdx=0;
+    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts=[];
     resetSectorUI();
-    document.getElementById('lap').textContent = '0';
-    document.getElementById('lapMsg').style.display = 'none';
-
+    var lapEl = document.getElementById('lap');
+    if (lapEl) lapEl.textContent='0';
+    var lapMsg = document.getElementById('lapMsg');
+    if (lapMsg) lapMsg.style.display='none';
     lastTime = performance.now();
     requestAnimationFrame(loop);
 });
 
-/* ===================== 位置同步 ===================== */
-
-// 从 update(dt) 里你要有这一段（这里只是提醒，不要在这里重复粘）
-// if (mpState.inRoom && g.on) {
-//     socket.emit('race:pos', {
-//         roomId: mpState.roomId,
-//         x: car.x,
-//         y: car.y,
-//         a: car.a,
-//         progress: g.progress,
-//         lap: g.lap
-//     });
-// }
-
-socket.on('race:pos', (data) => {
-    // data: { id, x, y, a, progress, lap }
+socket.on('race:pos', function(data){
     if (!mpState.inRoom) return;
-    if (data.id === mpState.myId) return; // 自己就不用更新了
+    if (data.id===mpState.myId) return;
     var p = mpState.players[data.id];
     if (!p) return;
-    if (!p.car) p.car = { x:data.x, y:data.y, a:data.a };
+    if (!p.car) p.car = { x:data.x,y:data.y,a:data.a };
     p.car.x = data.x;
     p.car.y = data.y;
     p.car.a = data.a;
     p.progress = data.progress;
-    p.lap = data.lap;
+    p.lap      = data.lap;
+});
+
+// ===== 页面初始化 =====
+window.addEventListener('load', function(){
+    loadPB();
+    loadLeaderboard();
 });
 </script>
 </body>
