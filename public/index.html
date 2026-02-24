@@ -923,71 +923,117 @@ function closeLB() {
     }
 }
 </script>
-
-<script>
     // 这里放联网和账号逻辑
-    let currentUser = null;
-    // 自动拦截成绩更新发送到服务器
-    const oldSet = localStorage.setItem;
-    localStorage.setItem = function(k, v) {
-        if(k === 'hmcl_racing_pb' && currentUser) {
-            socket.emit('submitPB', { user: currentUser, pb: JSON.parse(v) });
-        }
-        oldSet.apply(this, arguments);
-    };
-    
-    // 插入排行榜按钮到设置页
-    window.addEventListener('load', () => {
-        const s = document.getElementById('settings');
-        const b = document.createElement('button');
-        b.className='btn'; b.style.color='#d000ff'; b.innerHTML='🏆 LEADERBOARD';
-        b.onclick = () => { document.getElementById('leaderboard-layer').style.display='flex'; socket.emit('getLeaderboard'); };
-        s.insertBefore(b, s.lastElementChild);
-    });
-    socket.on('race:start', (data) => {
-    console.log('多人比赛开始!', data);
+<script>
+/* ===================== 登录逻辑 ===================== */
 
-    // 切到游戏画面，不启用单人 startGame
-    if (isMobile()) {
-        try { document.documentElement.requestFullscreen(); } catch(e) {}
+var playerName = localStorage.getItem('hmcl_playerName') || '';
+
+function handleAuth() {
+    console.log('点击登录按钮');
+    var uInput = document.getElementById('login-username');
+    var pInput = document.getElementById('login-password');
+    if (!uInput || !pInput) {
+        console.error('找不到登录输入框 login-username / login-password');
+        alert('页面结构有问题：找不到登录输入框');
+        return;
     }
-    show('play');
+    var username = (uInput.value || '').trim();
+    var password = (pInput.value || '').trim();
+    if (!username || !password) {
+        alert('账号和密码都要填');
+        return;
+    }
+    playerName = username;
+    localStorage.setItem('hmcl_playerName', playerName);
 
-    // 初始化赛道和自己的车
-    track = makeTrack();
-    var stIdx = 5;
-    var st = track[stIdx], nx = track[stIdx+5];
+    if (typeof socket !== 'undefined') {
+        socket.emit('login', { username, password });
+        console.log('已发送 login 事件给服务器');
+    }
+    show('menu');
+}
 
-    // 并排起跑：根据 data.players 顺序给每个人分车位
-    // data.players: [{ id, name, slot }]
-    var mySlot = 0;
-    data.players.forEach(p => {
-        if (p.id === mpState.myId) mySlot = p.slot;
-        mpState.players[p.id] = mpState.players[p.id] || { name: p.name, car: null };
+/* ===================== 多人状态 ===================== */
+
+var mpState = {
+    inRoom: false,
+    roomId: null,
+    isOwner: false,
+    maxPlayers: 4,
+    laps: 3,
+    password: '',
+    players: {},     // { socketId: { name, car, progress, lap } }
+    myId: null
+};
+
+/* ===================== Socket 初始化 ===================== */
+
+var socket = io("https://mt1-expressway.onrender.com", {
+    transports: ['websocket', 'polling']
+});
+
+socket.on("connect", () => {
+    console.log("已成功连接到服务器！ID:", socket.id);
+    mpState.myId = socket.id;
+});
+
+/* ===================== 多人房间 UI 相关 ===================== */
+
+function showMultiplayer() {
+    document.getElementById('mp-status').textContent = '';
+    document.getElementById('mp-player-list').innerHTML = '';
+    document.getElementById('mp-owner-controls').style.display = 'none';
+    show('multiplayer');
+}
+
+function createRoom() {
+    var roomName = document.getElementById('mp-room-name').value.trim() || ('room-' + Math.floor(Math.random()*10000));
+    var maxPlayers = parseInt(document.getElementById('mp-max-players').value, 10) || 4;
+    var laps = parseInt(document.getElementById('mp-laps').value, 10) || 3;
+    var password = document.getElementById('mp-password').value || '';
+
+    maxPlayers = Math.max(2, Math.min(8, maxPlayers));
+
+    mpState.roomId = roomName;
+    mpState.maxPlayers = maxPlayers;
+    mpState.laps = laps;
+    mpState.password = password;
+    mpState.isOwner = true;
+
+    socket.emit('room:create', {
+        roomId: roomName,
+        maxPlayers,
+        laps,
+        password,
+        name: playerName
     });
 
-    // 偏移：同一条线上左右排开，两排时上下略微错开
-    function slotToOffset(slot) {
-        var row = Math.floor(slot / 4);      // 每排最多4人
-        var col = slot % 4;                  // 0..3
-        var sideways = (col - 1.5) * 60;     // 左右
-        var forward = -row * 80;             // 第二排稍微靠后
-        return { sideways, forward };
+    document.getElementById('mp-status').textContent = '正在创建房间...';
+}
+
+function joinRoom() {
+    var roomName = document.getElementById('mp-room-name').value.trim();
+    if (!roomName) {
+        alert('请输入房间名');
+        return;
     }
+    var password = document.getElementById('mp-password').value || '';
 
-    var o = slotToOffset(mySlot);
-    var baseAngle = Math.atan2(nx.y - st.y, nx.x - st.x);
+    mpState.roomId = roomName;
+    mpState.isOwner = false;
 
-    car = {
-        x: st.x + Math.cos(baseAngle + Math.PI/2) * o.sideways + Math.cos(baseAngle) * o.forward,
-        y: st.y + Math.sin(baseAngle + Math.PI/2) * o.sideways + Math.sin(baseAngle) * o.forward,
-        a: baseAngle,
-        s: 0, vx: 0, vy: 0
-    };
-    cam = { x: car.x, y: car.y, zoom: 0.4 };
+    socket.emit('room:join', {
+        roomId: roomName,
+        password,
+        name: playerName
+    });
 
-    // 房间里其他玩家车对象初始化
-    // 房间创建/加入结果
+    document.getElementById('mp-status').textContent = '正在加入房间...';
+}
+
+/* 房间信息更新 */
+
 socket.on('room:update', (info) => {
     // info: { roomId, players: [{id,name}], ownerId, maxPlayers, laps }
     mpState.inRoom = true;
@@ -997,7 +1043,7 @@ socket.on('room:update', (info) => {
     mpState.players = {};
 
     info.players.forEach(p => {
-        mpState.players[p.id] = { name: p.name, car: null };
+        mpState.players[p.id] = { name: p.name, car: null, progress: 0, lap: 0 };
     });
 
     var listHtml = '房间ID: ' + info.roomId +
@@ -1030,6 +1076,63 @@ socket.on('room:left', () => {
     document.getElementById('mp-player-list').innerHTML = '';
     document.getElementById('mp-owner-controls').style.display = 'none';
 });
+
+/* 房主开始比赛 */
+
+function startMultiplayerRace() {
+    if (!mpState.inRoom || !mpState.isOwner) return;
+
+    socket.emit('race:start', {
+        roomId: mpState.roomId,
+        laps: mpState.laps
+    });
+}
+
+/* ===================== 比赛开始事件 ===================== */
+
+socket.on('race:start', (data) => {
+    console.log('多人比赛开始!', data);
+
+    // 切到游戏画面，不启用单人 startGame
+    if (isMobile()) {
+        try { document.documentElement.requestFullscreen(); } catch(e) {}
+    }
+    show('play');
+
+    // 初始化赛道和自己的车
+    track = makeTrack();
+    var stIdx = 5;
+    var st = track[stIdx], nx = track[stIdx+5];
+
+    // 并排起跑：根据 data.players 顺序给每个人分车位
+    // data.players: [{ id, name, slot }]
+    var mySlot = 0;
+    data.players.forEach(p => {
+        if (p.id === mpState.myId) mySlot = p.slot;
+        mpState.players[p.id] = mpState.players[p.id] || { name: p.name, car: null, progress: 0, lap: 0 };
+    });
+
+    // 偏移：同一条线上左右排开，两排时上下略微错开
+    function slotToOffset(slot) {
+        var row = Math.floor(slot / 4);      // 每排最多4人
+        var col = slot % 4;                  // 0..3
+        var sideways = (col - 1.5) * 60;     // 左右
+        var forward = -row * 80;             // 第二排稍微靠后
+        return { sideways, forward };
+    }
+
+    var o = slotToOffset(mySlot);
+    var baseAngle = Math.atan2(nx.y - st.y, nx.x - st.x);
+
+    car = {
+        x: st.x + Math.cos(baseAngle + Math.PI/2) * o.sideways + Math.cos(baseAngle) * o.forward,
+        y: st.y + Math.sin(baseAngle + Math.PI/2) * o.sideways + Math.sin(baseAngle) * o.forward,
+        a: baseAngle,
+        s: 0, vx: 0, vy: 0
+    };
+    cam = { x: car.x, y: car.y, zoom: 0.4 };
+
+    // 房间里其他玩家车对象初始化
     data.players.forEach(p => {
         if (p.id === mpState.myId) return;
         var so = slotToOffset(p.slot);
@@ -1058,29 +1161,34 @@ socket.on('room:left', () => {
     lastTime = performance.now();
     requestAnimationFrame(loop);
 });
-    socket.on('race:pos', (data) => {
+
+/* ===================== 位置同步 ===================== */
+
+// 从 update(dt) 里你要有这一段（这里只是提醒，不要在这里重复粘）
+// if (mpState.inRoom && g.on) {
+//     socket.emit('race:pos', {
+//         roomId: mpState.roomId,
+//         x: car.x,
+//         y: car.y,
+//         a: car.a,
+//         progress: g.progress,
+//         lap: g.lap
+//     });
+// }
+
+socket.on('race:pos', (data) => {
     // data: { id, x, y, a, progress, lap }
-        if (!mpState.inRoom) return;
-        if (data.id === mpState.myId) return; // 自己就不用更新了
-        var p = mpState.players[data.id];
-        if (!p) return;
-        if (!p.car) p.car = { x:data.x, y:data.y, a:data.a };
-        p.car.x = data.x;
-        p.car.y = data.y;
-        p.car.a = data.a;
-        p.progress = data.progress;
-        p.lap = data.lap;
+    if (!mpState.inRoom) return;
+    if (data.id === mpState.myId) return; // 自己就不用更新了
+    var p = mpState.players[data.id];
+    if (!p) return;
+    if (!p.car) p.car = { x:data.x, y:data.y, a:data.a };
+    p.car.x = data.x;
+    p.car.y = data.y;
+    p.car.a = data.a;
+    p.progress = data.progress;
+    p.lap = data.lap;
 });
-    socket.on('leaderboardUpdate', (data) => {
-        const b = document.getElementById('lb-body');
-        b.innerHTML = '<tr><th>RANK</th><th>PILOT</th><th>TIME</th></tr>';
-        data.forEach((r, i) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>#${i+1}</td><td>${r.name}</td><td>${fmt(r.pb.lap)}</td>`;
-            tr.onclick = () => { /* 对比逻辑 */ };
-            b.appendChild(tr);
-        });
-    });
 </script>
 </body>
 </html>
