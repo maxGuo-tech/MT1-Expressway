@@ -146,6 +146,15 @@
             <div>LAP: <span id="lap">0</span> / 1</div>
             <div>SPEED: <span id="speed">0</span> km/h</div>
             <div>BEST PB: <span id="best">--:--.---</span></div>
+            <div id="mp-rank"
+                style="position:absolute;
+                top:10px;
+                right:10px;
+                text-align:right;
+                color:#fff;
+                font-size:14px;
+                pointer-events:none;">
+            </div>
         </div>
         <div id="sectors-ui">
             <div id="s1-box" class="sec-box"><span>SECTOR 1</span><div id="s1-time">--.--</div></div>
@@ -202,7 +211,9 @@ var g = {
     curSecTimes: [0,0,0],
     pb: { lap: Infinity, s1: Infinity, s2: Infinity, s3: Infinity },
     currentSplitIdx: 0,
-    uiTimeouts: []
+    uiTimeouts: [],
+    mode: 'single',      // 'single' / 'multi'
+    raceLaps: 1          // 当前比赛圈数
 };
 
 var lastTime = 0;
@@ -215,15 +226,17 @@ var mpState = {
     maxPlayers: 4,
     laps: 3,
     password: '',
-    players: {}, // { id: { name, car:{x,y,a}, progress, lap } }
-    myId: null
+    players: {}, // { id: { name, car, progress, lap, finished, finishTime } }
+    myId: null,
+    raceActive: false,
+    lastPosSend: 0
 };
 
 var socket = io("https://mt1-expressway.onrender.com", {
     transports: ['websocket', 'polling']
 });
 
-socket.on("connect", () => {
+socket.on("connect", function(){
     console.log("已成功连接到服务器！ID:", socket.id);
     mpState.myId = socket.id;
 });
@@ -541,29 +554,73 @@ function endGame(){
     show('end');
 }
 
-function countdown(){
+// ===== 倒计时与开赛 =====
+function countdown(onFinish){
     var el = document.getElementById('cd');
-    if (!el) { g.on=1; g.st=g.lt=g.secStartTime=Date.now(); lastTime=performance.now(); requestAnimationFrame(loop); return; }
+    if (!el){
+        if (onFinish) onFinish();
+        return;
+    }
     el.style.display='block';
     el.style.color='#fff';
-    var n=3;
-    el.textContent=n;
-    var iv=setInterval(function(){
+    var n = 3;
+    el.textContent = n;
+    var iv = setInterval(function(){
         n--;
         if (n>0){
-            el.textContent=n;
-        }else if(n===0){
-            el.textContent='GO!';
-            el.style.color='#0f0';
+            el.textContent = n;
+        }else if (n===0){
+            el.textContent = 'GO!';
+            el.style.color = '#0f0';
         }else{
             clearInterval(iv);
             el.style.display='none';
-            g.on=1;
-            g.st=g.lt=g.secStartTime=Date.now();
-            lastTime=performance.now();
-            requestAnimationFrame(loop);
+            if (onFinish) onFinish();
         }
     },800);
+}
+
+function prepareRace(startPos){
+    track = makeTrack();
+    var stIdx = startPos && startPos.stIdx != null ? startPos.stIdx : 5;
+    var st    = track[stIdx];
+    var nx    = track[stIdx+5];
+    var baseAngle = Math.atan2(nx.y-st.y, nx.x-st.x);
+
+    var offs = startPos && startPos.offset ? startPos.offset : {sideways:0, forward:0};
+
+    car = {
+        x: st.x + Math.cos(baseAngle+Math.PI/2)*offs.sideways +
+                 Math.cos(baseAngle)*offs.forward,
+        y: st.y + Math.sin(baseAngle+Math.PI/2)*offs.sideways +
+                 Math.sin(baseAngle)*offs.forward,
+        a: baseAngle,
+        s:0, vx:0, vy:0
+    };
+    cam = { x:car.x, y:car.y, zoom:0.4 };
+
+    g.on = 0;
+    g.lap = 0;
+    g.progress = 0;
+    g.lastProgress = 0;
+    g.curSecTimes = [0,0,0];
+    g.currentSplitIdx = 0;
+    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts = [];
+    resetSectorUI();
+
+    var lapEl  = document.getElementById('lap');
+    var lapMsg = document.getElementById('lapMsg');
+    if (lapEl)  lapEl.textContent = '0';
+    if (lapMsg) lapMsg.style.display = 'none';
+}
+
+function startRace(mode, laps){
+    g.mode     = mode || 'single';
+    g.raceLaps = laps || cfg.laps;
+    g.on       = 1;
+    g.st = g.lt = g.secStartTime = Date.now();
+    lastTime = performance.now();
+    requestAnimationFrame(loop);
 }
 
 // ===== 游戏主循环 =====
@@ -633,16 +690,19 @@ function update(dt){
         var lapTime = Date.now()-g.lt;
         recordSector(2);
         g.lap++;
-        var lapEl = document.getElementById('lap');
-        if (lapEl) lapEl.textContent = g.lap;
+        var lapEl2 = document.getElementById('lap');
+        if (lapEl2) lapEl2.textContent = g.lap;
         showLapTime(g.lap, lapTime);
 
+        var finishedThisLap = (g.lap >= g.raceLaps);
+
+        // PB 和上传（逻辑仍然保留）
         if (lapTime < g.pb.lap){
             g.pb = {
                 lap: lapTime,
-                s1: g.curSecTimes[0],
-                s2: g.curSecTimes[1],
-                s3: g.curSecTimes[2]
+                s1 : g.curSecTimes[0],
+                s2 : g.curSecTimes[1],
+                s3 : g.curSecTimes[2]
             };
             localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
 
@@ -663,13 +723,33 @@ function update(dt){
             .catch(function(err){ console.error('上传排行榜失败:',err); });
         }
 
-        if (g.lap >= cfg.laps){
-            setTimeout(endGame,2000);
-        }else{
-            g.lt = Date.now();
-            g.secStartTime = Date.now();
-            g.currentSplitIdx = 0;
-            g.curSecTimes = [0,0,0];
+        if (g.mode === 'single'){
+            if (finishedThisLap){
+                setTimeout(endGame,2000);
+            }else{
+                g.lt = Date.now();
+                g.secStartTime = Date.now();
+                g.currentSplitIdx = 0;
+                g.curSecTimes = [0,0,0];
+            }
+        }else{ // multi
+            if (finishedThisLap){
+                g.on = 0; // 自己不再驱动物理
+                mpState.players[mpState.myId] = mpState.players[mpState.myId] || {name:playerName};
+                mpState.players[mpState.myId].finished   = true;
+                mpState.players[mpState.myId].finishTime = Date.now() - g.st;
+
+                socket.emit('race:finish', {
+                    roomId: mpState.roomId,
+                    totalTime: mpState.players[mpState.myId].finishTime,
+                    laps: g.raceLaps
+                });
+            }else{
+                g.lt = Date.now();
+                g.secStartTime = Date.now();
+                g.currentSplitIdx = 0;
+                g.curSecTimes = [0,0,0];
+            }
         }
     }
 
@@ -681,15 +761,24 @@ function update(dt){
     if (timeEl)  timeEl.textContent  = fmt(Date.now()-g.st);
     if (speedEl) speedEl.textContent = Math.round(Math.hypot(car.vx,car.vy)*25);
 
-    // 向服务器同步自己位置
+    // 向服务器同步自己位置（限速）
     if (mpState.inRoom && g.on){
-        socket.emit('race:pos',{
-            roomId: mpState.roomId,
-            x: car.x, y: car.y, a: car.a,
-            progress: g.progress,
-            lap: g.lap
-        });
+        var nowMs = Date.now();
+        if (nowMs - mpState.lastPosSend > 100){
+            mpState.lastPosSend = nowMs;
+            socket.emit('race:pos', {
+                roomId: mpState.roomId,
+                x: car.x,
+                y: car.y,
+                a: car.a,
+                progress: g.progress,
+                lap: g.lap
+            });
+        }
     }
+
+    // 更新本地排名显示
+    updateLocalRanking();
 }
 
 function draw(){
@@ -773,8 +862,7 @@ function draw(){
         Object.keys(mpState.players).forEach(function(id){
             if (id===mpState.myId) return;
             var p = mpState.players[id];
-            if (!p.car) return;
-
+            if (!p || !p.car) return;
             c.save();
             c.translate(p.car.x,p.car.y);
             c.rotate(p.car.a);
@@ -839,32 +927,19 @@ function startGame(){
         localStorage.setItem('hmcl_playerName', playerName);
     }
     socket.emit('login',{ username: playerName });
+
     if (isMobile()){
         try { document.documentElement.requestFullscreen(); } catch(e){}
     }
     show('play');
-    track = makeTrack();
-    var stIdx=5,
-        st   = track[stIdx],
-        nx   = track[stIdx+5];
-    car = {
-        x: st.x,
-        y: st.y,
-        a: Math.atan2(nx.y-st.y, nx.x-st.x),
-        s:0, vx:0, vy:0
-    };
-    cam = { x:car.x, y:car.y, zoom:0.4 };
-    g.on=0; g.lap=0;
-    g.progress=0; g.lastProgress=0;
-    g.curSecTimes=[0,0,0];
-    g.currentSplitIdx=0;
-    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts=[];
-    resetSectorUI();
-    var lapEl = document.getElementById('lap');
-    if (lapEl) lapEl.textContent='0';
-    var lapMsg = document.getElementById('lapMsg');
-    if (lapMsg) lapMsg.style.display='none';
-    countdown();
+
+    prepareRace(null);
+    g.mode     = 'single';
+    g.raceLaps = cfg.laps;
+
+    countdown(function(){
+        startRace('single', cfg.laps);
+    });
 }
 
 // ===== 多人房间与同步 =====
@@ -926,7 +1001,10 @@ socket.on('room:update', function(info){
     mpState.laps      = info.laps;
     mpState.players   = {};
     info.players.forEach(function(p){
-        mpState.players[p.id] = { name:p.name, car:null, progress:0, lap:0 };
+        mpState.players[p.id] = {
+            name:p.name, car:null, progress:0, lap:0,
+            finished:false, finishTime:Infinity
+        };
     });
 
     var listHtml = '房间ID: '+info.roomId+
@@ -972,11 +1050,17 @@ function startMultiplayerRace(){
 }
 
 socket.on('race:start', function(data){
-    console.log('多人比赛开始!',data);
+    console.log('多人比赛开始准备!',data);
+
+    mpState.raceActive = true;
+    g.mode     = 'multi';
+    g.raceLaps = data.laps || mpState.laps || cfg.laps;
+
     if (isMobile()){
         try{ document.documentElement.requestFullscreen(); }catch(e){}
     }
     show('play');
+
     track = makeTrack();
     var stIdx=5,
         st   = track[stIdx],
@@ -994,10 +1078,13 @@ socket.on('race:start', function(data){
     var mySlot=0;
     data.players.forEach(function(p){
         if (p.id===mpState.myId) mySlot=p.slot;
-        mpState.players[p.id] = mpState.players[p.id] ||
-            { name:p.name, car:null, progress:0, lap:0 };
+        mpState.players[p.id] = mpState.players[p.id] || {
+            name:p.name, car:null, progress:0, lap:0,
+            finished:false, finishTime:Infinity
+        };
     });
 
+    // 自己起跑位
     var o = slotToOffset(mySlot);
     car = {
         x: st.x + Math.cos(baseAngle+Math.PI/2)*o.sideways +
@@ -1009,6 +1096,7 @@ socket.on('race:start', function(data){
     };
     cam = { x:car.x, y:car.y, zoom:0.4 };
 
+    // 其他玩家起跑位
     data.players.forEach(function(p){
         if (p.id===mpState.myId) return;
         var so = slotToOffset(p.slot);
@@ -1019,10 +1107,14 @@ socket.on('race:start', function(data){
                      Math.sin(baseAngle)*so.forward,
             a: baseAngle
         };
+        mpState.players[p.id].progress = 0;
+        mpState.players[p.id].lap      = 0;
+        mpState.players[p.id].finished = false;
+        mpState.players[p.id].finishTime = Infinity;
     });
 
-    g.on=1;
-    g.st=g.lt=g.secStartTime=Date.now();
+    // 重置计时
+    g.on=0;
     g.lap=0;
     g.progress=0; g.lastProgress=0;
     g.curSecTimes=[0,0,0];
@@ -1030,11 +1122,13 @@ socket.on('race:start', function(data){
     g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts=[];
     resetSectorUI();
     var lapEl = document.getElementById('lap');
-    if (lapEl) lapEl.textContent='0';
     var lapMsg = document.getElementById('lapMsg');
+    if (lapEl)  lapEl.textContent='0';
     if (lapMsg) lapMsg.style.display='none';
-    lastTime = performance.now();
-    requestAnimationFrame(loop);
+
+    countdown(function(){
+        startRace('multi', g.raceLaps);
+    });
 });
 
 socket.on('race:pos', function(data){
@@ -1050,11 +1144,79 @@ socket.on('race:pos', function(data){
     p.lap      = data.lap;
 });
 
+// 可选：服务器广播整场结束
+socket.on('race:end', function(result){
+    mpState.raceActive = false;
+    g.on = 0;
+    if (!result || !result.length) return;
+    var msg = '比赛结果：<br>';
+    result.forEach(function(p,idx){
+        msg += (idx+1)+'. '+p.name+' - '+fmt(p.totalTime)+'<br>';
+    });
+    var res = document.getElementById('end-result');
+    if (res) res.innerHTML = msg;
+    show('end');
+});
+
+// ===== 实时本地排名 =====
+function updateLocalRanking(){
+    var box = document.getElementById('mp-rank');
+    if (!box) return;
+    if (!mpState.inRoom || !mpState.raceActive) {
+        box.innerHTML = '';
+        return;
+    }
+    var list = [];
+
+    // 自己
+    list.push({
+        id: mpState.myId,
+        name: playerName || '你',
+        lap: g.lap,
+        progress: g.progress,
+        finished: mpState.players[mpState.myId] && mpState.players[mpState.myId].finished,
+        finishTime: mpState.players[mpState.myId] ? mpState.players[mpState.myId].finishTime : Infinity
+    });
+
+    // 其他玩家
+    Object.keys(mpState.players).forEach(function(id){
+        if (id===mpState.myId) return;
+        var p = mpState.players[id];
+        if (!p) return;
+        list.push({
+            id:id,
+            name:p.name || 'P',
+            lap:p.lap || 0,
+            progress:p.progress || 0,
+            finished:p.finished || false,
+            finishTime:p.finishTime || Infinity
+        });
+    });
+
+    list.sort(function(a,b){
+        if (a.finished && b.finished){
+            return a.finishTime - b.finishTime;
+        }
+        if (a.finished !== b.finished){
+            return a.finished ? -1 : 1;
+        }
+        if (a.lap !== b.lap) return b.lap - a.lap;
+        return b.progress - a.progress;
+    });
+
+    var html = '';
+    list.forEach(function(p,idx){
+        var meMark = (p.id===mpState.myId) ? ' (你)' : '';
+        html += (idx+1)+'. '+p.name+meMark+
+                ' ['+p.lap+'/'+g.raceLaps+']'+
+                (p.finished?' ✔':'')+'<br>';
+    });
+    box.innerHTML = html;
+}
+
 // ===== 页面初始化 =====
 window.addEventListener('load', function(){
     loadPB();
     loadLeaderboard();
 });
 </script>
-</body>
-</html>
