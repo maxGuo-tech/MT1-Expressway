@@ -226,10 +226,11 @@ var mpState = {
     maxPlayers: 4,
     laps: 3,
     password: '',
-    players: {}, // { id: { name, car, progress, lap, finished, finishTime } }
+    players: {}, // { id: { name, car, progress, lap, finished, finishTime, ready } }
     myId: null,
     raceActive: false,
-    lastPosSend: 0
+    lastPosSend: 0,
+    myReady: false
 };
 
 var socket = io("https://mt1-expressway.onrender.com", {
@@ -408,7 +409,6 @@ function resetPB(){
 
 // ===== 登录与页面切换 =====
 function handleAuth(){
-    console.log('点击登录按钮');
     var uInput = document.getElementById('login-username');
     var pInput = document.getElementById('login-password');
     if (!uInput || !pInput) {
@@ -424,7 +424,6 @@ function handleAuth(){
     playerName = username;
     localStorage.setItem('hmcl_playerName', playerName);
     socket.emit('login', { username: username, password: password });
-    console.log('已发送 login 事件给服务器');
     show('menu');
 }
 
@@ -544,7 +543,7 @@ function showLapTime(lapNum,time){
 
 function endGame(){
     if (g.mode === 'multi') {
-        // 多人比赛不用单人 end 层
+        // 多人模式不使用单人 end 层
         return;
     }
     g.on = 0;
@@ -616,6 +615,9 @@ function prepareRace(startPos){
     var lapMsg = document.getElementById('lapMsg');
     if (lapEl)  lapEl.textContent = '0';
     if (lapMsg) lapMsg.style.display = 'none';
+
+    var fb = document.getElementById('finish-banner');
+    if (fb) fb.style.display = 'none';
 }
 
 function startRace(mode, laps){
@@ -643,18 +645,27 @@ function update(dt){
     // 车辆物理
     var ms=18, ac=0.25, br=0.4, tr=0.06, fr=0.01, dr=0.96;
 
-    if (keys.w) car.s = Math.min(car.s + ac*dt, ms);
-    if (keys.s) car.s = Math.max(car.s - br*dt, -ms*0.3);
+    // 多人模式下：自己已 finished 就不再计圈/算物理，只允许慢速自由滑动？
+    var allowDrive = !(
+        g.mode === 'multi' &&
+        mpState.players[mpState.myId] &&
+        mpState.players[mpState.myId].finished
+    );
 
-    if (!keys.w && !keys.s){
-        if (car.s>0) car.s = Math.max(0,  car.s - fr*dt);
-        else         car.s = Math.min(0,  car.s + fr*dt);
+    if (allowDrive){
+        if (keys.w) car.s = Math.min(car.s + ac*dt, ms);
+        if (keys.s) car.s = Math.max(car.s - br*dt, -ms*0.3);
+
+        if (!keys.w && !keys.s){
+            if (car.s>0) car.s = Math.max(0,  car.s - fr*dt);
+            else         car.s = Math.min(0,  car.s + fr*dt);
+        }
+
+        var sr = Math.abs(car.s)/ms;
+        var tf = 0.4 + sr*0.6;
+        if (keys.a) car.a -= tr*tf*dt;
+        if (keys.d) car.a += tr*tf*dt;
     }
-
-    var sr = Math.abs(car.s)/ms;
-    var tf = 0.4 + sr*0.6;
-    if (keys.a) car.a -= tr*tf*dt;
-    if (keys.d) car.a += tr*tf*dt;
 
     var tx = Math.cos(car.a)*car.s;
     var ty = Math.sin(car.a)*car.s;
@@ -679,80 +690,89 @@ function update(dt){
         car.y += (np.y-car.y)*0.2*dt;
     }
 
-    g.lastProgress = g.progress;
-    g.progress = ni/track.length;
+    if (allowDrive){
+        g.lastProgress = g.progress;
+        g.progress = ni/track.length;
 
-    var curIdx  = ni;
-    var prevIdx = Math.floor(g.lastProgress*track.length);
-    for (var sIdx=0;sIdx<2;sIdx++){
-        var sp = g.splitIndices[sIdx];
-        if (g.currentSplitIdx===sIdx && curIdx>=sp && prevIdx<sp)
-            recordSector(sIdx);
-    }
-
-    if (g.lastProgress>0.9 && g.progress<0.1){
-        var lapTime = Date.now()-g.lt;
-        recordSector(2);
-        g.lap++;
-        var lapEl2 = document.getElementById('lap');
-        if (lapEl2) lapEl2.textContent = g.lap;
-        showLapTime(g.lap, lapTime);
-
-        var finishedThisLap = (g.lap >= g.raceLaps);
-
-        // PB 和上传（单人/多人都保留）
-        if (lapTime < g.pb.lap){
-            g.pb = {
-                lap: lapTime,
-                s1 : g.curSecTimes[0],
-                s2 : g.curSecTimes[1],
-                s3 : g.curSecTimes[2]
-            };
-            localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
-
-            fetch('https://mt1-expressway.onrender.com/api/leaderboard', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({
-                    name:playerName,
-                    lap:g.pb.lap,
-                    s1:g.pb.s1,
-                    s2:g.pb.s2,
-                    s3:g.pb.s3
-                })
-            }).then(function(r){
-                if(!r.ok) throw new Error('HTTP '+r.status);
-                return r.json().catch(function(){ return {}; });
-            }).then(function(){ loadLeaderboard(); })
-            .catch(function(err){ console.error('上传排行榜失败:',err); });
+        var curIdx  = ni;
+        var prevIdx = Math.floor(g.lastProgress*track.length);
+        for (var sIdx=0;sIdx<2;sIdx++){
+            var sp = g.splitIndices[sIdx];
+            if (g.currentSplitIdx===sIdx && curIdx>=sp && prevIdx<sp)
+                recordSector(sIdx);
         }
 
-        if (g.mode === 'single'){
-            if (finishedThisLap){
-                setTimeout(endGame,2000);
-            }else{
-                g.lt = Date.now();
-                g.secStartTime = Date.now();
-                g.currentSplitIdx = 0;
-                g.curSecTimes = [0,0,0];
-            }
-        }else{ // multi
-            if (finishedThisLap){
-                g.on = 0; // 自己不再驱动物理
-                mpState.players[mpState.myId] = mpState.players[mpState.myId] || {name:playerName};
-                mpState.players[mpState.myId].finished   = true;
-                mpState.players[mpState.myId].finishTime = Date.now() - g.st;
+        if (g.lastProgress>0.9 && g.progress<0.1){
+            var lapTime = Date.now()-g.lt;
+            recordSector(2);
+            g.lap++;
+            var lapEl2 = document.getElementById('lap');
+            if (lapEl2) lapEl2.textContent = g.lap;
+            showLapTime(g.lap, lapTime);
 
-                socket.emit('race:finish', {
-                    roomId: mpState.roomId,
-                    totalTime: mpState.players[mpState.myId].finishTime,
-                    laps: g.raceLaps
-                });
-            }else{
-                g.lt = Date.now();
-                g.secStartTime = Date.now();
-                g.currentSplitIdx = 0;
-                g.curSecTimes = [0,0,0];
+            var finishedThisLap = (g.lap >= g.raceLaps);
+
+            // PB 和上传
+            if (lapTime < g.pb.lap){
+                g.pb = {
+                    lap: lapTime,
+                    s1 : g.curSecTimes[0],
+                    s2 : g.curSecTimes[1],
+                    s3 : g.curSecTimes[2]
+                };
+                localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
+
+                fetch('https://mt1-expressway.onrender.com/api/leaderboard', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({
+                        name:playerName,
+                        lap:g.pb.lap,
+                        s1:g.pb.s1,
+                        s2:g.pb.s2,
+                        s3:g.pb.s3
+                    })
+                }).then(function(r){
+                    if(!r.ok) throw new Error('HTTP '+r.status);
+                    return r.json().catch(function(){ return {}; });
+                }).then(function(){ loadLeaderboard(); })
+                .catch(function(err){ console.error('上传排行榜失败:',err); });
+            }
+
+            if (g.mode === 'single'){
+                if (finishedThisLap){
+                    setTimeout(endGame,2000);
+                }else{
+                    g.lt = Date.now();
+                    g.secStartTime = Date.now();
+                    g.currentSplitIdx = 0;
+                    g.curSecTimes = [0,0,0];
+                }
+            }else{ // multi
+                if (finishedThisLap){
+                    // 标记自己完赛，但不关掉 g.on，让世界继续跑
+                    var me = mpState.players[mpState.myId] || (mpState.players[mpState.myId]={name:playerName});
+                    me.finished   = true;
+                    me.finishTime = Date.now() - g.st;
+
+                    // 完赛提示大字
+                    var fb = document.getElementById('finish-banner');
+                    if (fb) fb.style.display = 'block';
+
+                    // 告诉服务器
+                    socket.emit('race:finish', {
+                        roomId: mpState.roomId,
+                        totalTime: me.finishTime,
+                        laps: g.raceLaps
+                    });
+
+                    // 不再计圈；g.on 保持 1，这样还能看别人跑
+                }else{
+                    g.lt = Date.now();
+                    g.secStartTime = Date.now();
+                    g.currentSplitIdx = 0;
+                    g.curSecTimes = [0,0,0];
+                }
             }
         }
     }
@@ -964,7 +984,7 @@ function startGame(){
     });
 }
 
-// ===== 多人房间与同步 =====
+// ===== 多人房间与同步（含准备状态） =====
 function showMultiplayer(){
     var st = document.getElementById('mp-status');
     var pl = document.getElementById('mp-player-list');
@@ -972,6 +992,8 @@ function showMultiplayer(){
     if (st) st.textContent='';
     if (pl) pl.innerHTML='';
     if (oc) oc.style.display='none';
+    mpState.myReady = false;
+    updateReadyUI();
     show('multiplayer');
 }
 
@@ -988,6 +1010,7 @@ function createRoom(){
     mpState.laps      = laps;
     mpState.password  = password;
     mpState.isOwner   = true;
+    mpState.myReady   = false;
 
     socket.emit('room:create',{
         roomId:roomName,
@@ -1007,6 +1030,7 @@ function joinRoom(){
     var password = document.getElementById('mp-password').value || '';
     mpState.roomId  = roomName;
     mpState.isOwner = false;
+    mpState.myReady = false;
     socket.emit('room:join',{
         roomId:roomName,
         password:password,
@@ -1014,6 +1038,27 @@ function joinRoom(){
     });
     var st = document.getElementById('mp-status');
     if (st) st.textContent='正在加入房间...';
+}
+
+function updateReadyUI(){
+    var btn  = document.getElementById('mp-ready-btn');
+    var text = document.getElementById('mp-ready-status');
+    if (btn){
+        btn.textContent = mpState.myReady ? '取消准备' : '准备';
+    }
+    if (text){
+        text.textContent = mpState.myReady ? '已准备' : '';
+    }
+}
+
+function toggleReady(){
+    if (!mpState.inRoom) return;
+    mpState.myReady = !mpState.myReady;
+    updateReadyUI();
+    socket.emit('room:ready', {
+        roomId: mpState.roomId,
+        ready: mpState.myReady
+    });
 }
 
 socket.on('room:update', function(info){
@@ -1026,10 +1071,19 @@ socket.on('room:update', function(info){
 
     info.players.forEach(function(p){
         mpState.players[p.id] = {
-            name:p.name, car:null, progress:0, lap:0,
-            finished:false, finishTime:Infinity
+            name:p.name,
+            car:null,
+            progress:0,
+            lap:0,
+            finished:false,
+            finishTime:Infinity,
+            ready: !!p.ready
         };
+        if (p.id === mpState.myId){
+            mpState.myReady = !!p.ready;
+        }
     });
+    updateReadyUI();
 
     var listHtml = '房间ID: '+info.roomId+
         '<br>圈数: '+info.laps+
@@ -1037,7 +1091,8 @@ socket.on('room:update', function(info){
         '<br><br>玩家列表:<br>';
     info.players.forEach(function(p){
         var mark = (p.id===info.ownerId)?' (房主)':'';
-        listHtml += '- '+p.name+mark+'<br>';
+        var readyMark = p.ready ? ' [已准备]' : ' [未准备]';
+        listHtml += '- '+p.name+mark+readyMark+'<br>';
     });
     var pl = document.getElementById('mp-player-list');
     if (pl) pl.innerHTML = listHtml;
@@ -1061,6 +1116,8 @@ socket.on('room:left', function(){
     mpState.roomId=null;
     mpState.players={};
     mpState.raceActive=false;
+    mpState.myReady=false;
+    updateReadyUI();
     var st = document.getElementById('mp-status');
     var pl = document.getElementById('mp-player-list');
     var oc = document.getElementById('mp-owner-controls');
@@ -1071,6 +1128,17 @@ socket.on('room:left', function(){
 
 function startMultiplayerRace(){
     if (!mpState.inRoom || !mpState.isOwner) return;
+
+    // 前端简单检查：所有玩家已准备
+    var allReady = true;
+    Object.keys(mpState.players).forEach(function(id){
+        if (!mpState.players[id].ready) allReady = false;
+    });
+    if (!allReady){
+        alert('还有玩家未准备，无法开始比赛。');
+        return;
+    }
+
     socket.emit('race:start',{ roomId:mpState.roomId, laps:mpState.laps });
 }
 
@@ -1080,6 +1148,17 @@ socket.on('race:start', function(data){
     mpState.raceActive = true;
     g.mode     = 'multi';
     g.raceLaps = data.laps || mpState.laps || cfg.laps;
+
+    // 比赛开始时重置所有 finished 标记
+    Object.keys(mpState.players).forEach(function(id){
+        mpState.players[id].finished   = false;
+        mpState.players[id].finishTime = Infinity;
+        mpState.players[id].lap        = 0;
+        mpState.players[id].progress   = 0;
+    });
+
+    var fb = document.getElementById('finish-banner');
+    if (fb) fb.style.display = 'none';
 
     if (isMobile()){
         try{ document.documentElement.requestFullscreen(); }catch(e){}
@@ -1105,7 +1184,7 @@ socket.on('race:start', function(data){
         if (p.id===mpState.myId) mySlot=p.slot;
         mpState.players[p.id] = mpState.players[p.id] || {
             name:p.name, car:null, progress:0, lap:0,
-            finished:false, finishTime:Infinity
+            finished:false, finishTime:Infinity, ready:false
         };
     });
 
@@ -1173,9 +1252,39 @@ socket.on('race:pos', function(data){
 socket.on('race:end', function(result){
     mpState.raceActive = false;
     g.on = 0;
+    showRaceResult(result);
+});
+
+// 如果服务器没发 race:end，本地兜底：检测是否所有人 finished
+function checkLocalRaceEnd(){
+    if (!mpState.inRoom || !mpState.raceActive) return;
+    var allFinished = true;
+    var list = [];
+    Object.keys(mpState.players).forEach(function(id){
+        var p = mpState.players[id];
+        if (!p.finished) allFinished = false;
+    });
+    if (!allFinished) return;
+
+    // 全部完成，本地构造结果并结算
+    var result = [];
+    Object.keys(mpState.players).forEach(function(id){
+        var p = mpState.players[id];
+        result.push({
+            id:id,
+            name:p.name,
+            totalTime:p.finishTime
+        });
+    });
+    result.sort(function(a,b){ return a.totalTime - b.totalTime; });
+    mpState.raceActive = false;
+    g.on = 0;
+    showRaceResult(result);
+}
+
+function showRaceResult(result){
     if (!result || !result.length) return;
 
-    // 构建一个大气一点的结果列表
     var html = '';
     result.forEach(function(p,idx){
         var rank = idx+1;
@@ -1195,16 +1304,16 @@ socket.on('race:end', function(result){
     var cont = document.getElementById('race-result-content');
     if (cont) cont.innerHTML = html;
 
-    // 不退房，回到房间视图或专门结果层
+    var fb = document.getElementById('finish-banner');
+    if (fb) fb.style.display = 'none';
+
     var layer = document.getElementById('race-result-layer');
     if (layer){
-        // 如果 race-result-layer 也是 .scr，可以用 show 切换
         show('race-result-layer');
-    }else{
-        // 退一步：如果你没用 scr 管它，就强制显示
-        if (cont && cont.parentNode) cont.parentNode.style.display = 'block';
+    }else if (cont && cont.parentNode){
+        cont.parentNode.style.display = 'block';
     }
-});
+}
 
 // ===== 实时本地排名 + 多人隐藏 PB HUD =====
 function updateLocalRanking(){
@@ -1283,7 +1392,7 @@ function updateLocalRanking(){
         var rank = idx+1;
 
         var lapStr = p.lap + '/' + g.raceLaps;
-        var flag   = p.finished ? 'FIN' : 'RUN';
+        var flag   = p.finished ? 'FINISH' : 'RUN';
 
         html += '<div style="display:flex;align-items:center;justify-content:space-between;' +
                 'padding:4px 6px;margin-bottom:3px;border-radius:4px;' +
@@ -1294,11 +1403,14 @@ function updateLocalRanking(){
                     (isMe ? ' <span style="font-size:11px;color:#0ff;">(YOU)</span>' : '')+
                 '</div>' +
                 '<div style="min-width:60px;text-align:right;font-size:11px;color:#ccc;">'+lapStr+'</div>' +
-                '<div style="min-width:32px;text-align:right;font-size:11px;color:#ffa;">'+flag+'</div>' +
+                '<div style="min-width:52px;text-align:right;font-size:11px;color:#ffa;">'+flag+'</div>' +
                 '</div>';
     });
 
     box.innerHTML = html;
+
+    // 本地兜底：检测是否所有人 finished
+    checkLocalRaceEnd();
 }
 
 // ===== 页面初始化 =====
