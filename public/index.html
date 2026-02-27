@@ -1205,26 +1205,71 @@ socket.on('race:end', function(result){
     g.on = 0;
     showRaceResult(result);
 });
+// 某个玩家完赛（服务器广播）
+socket.on('race:finish', function (data) {
+    if (!mpState.inRoom) return;
+    var p = mpState.players[data.id];
+    if (!p) {
+        mpState.players[data.id] = {
+            name: data.name || ('P'+data.id.slice(0,4)),
+            car: null,
+            progress: data.progress || 0,
+            lap: data.lap || g.raceLaps,
+            finished: true,
+            finishTime: data.totalTime || Infinity
+        };
+    } else {
+        p.finished   = true;
+        p.finishTime = data.totalTime || p.finishTime || Infinity;
+        p.lap        = data.lap || p.lap || g.raceLaps;
+        p.progress   = data.progress || p.progress || 1;
+    }
 
+    // 如果你自己这边还没 finished（比如刚好同时冲线），也顺手标一下
+    if (data.id === mpState.myId) {
+        var me = mpState.players[mpState.myId];
+        if (me) {
+            me.finished   = true;
+            me.finishTime = data.totalTime || (Date.now() - g.st);
+        }
+        var fb = document.getElementById('finish-banner');
+        if (fb) fb.style.display = 'block';
+    }
+
+    // 每来一个完赛事件都尝试检查一次是否全部完成
+    checkLocalRaceEnd();
+});
 // 本地兜底：所有人 finished 就结算
-function checkLocalRaceEnd(){
+// 本地兜底：所有人 finished 就结算
+function checkLocalRaceEnd() {
     if (!mpState.inRoom || !mpState.raceActive) return;
-    var allFinished = true;
-    Object.keys(mpState.players).forEach(function(id){
-        if (!mpState.players[id].finished) allFinished = false;
-    });
-    if (!allFinished) return;
 
+    var ids = Object.keys(mpState.players);
+    if (!ids.length) return;
+
+    var allFinished = true;
     var result = [];
-    Object.keys(mpState.players).forEach(function(id){
+
+    ids.forEach(function (id) {
         var p = mpState.players[id];
+        // 只要还有人没到指定圈数，就认为没完
+        if (!p.finished && (p.lap || 0) < g.raceLaps) {
+            allFinished = false;
+        }
         result.push({
-            id:id,
-            name:p.name,
-            totalTime:p.finishTime
+            id: id,
+            name: p.name,
+            totalTime: p.finishTime || Infinity
         });
     });
-    result.sort(function(a,b){ return a.totalTime - b.totalTime; });
+
+    if (!allFinished) return;
+
+    // 排个名
+    result.sort(function (a, b) {
+        return a.totalTime - b.totalTime;
+    });
+
     mpState.raceActive = false;
     g.on = 0;
     showRaceResult(result);
@@ -1252,12 +1297,12 @@ function showRaceResult(result){
     var cont = document.getElementById('race-result-content');
     if (cont) cont.innerHTML = html;
 
+    // 把“您已完赛”提示关掉
     var fb = document.getElementById('finish-banner');
     if (fb) fb.style.display = 'none';
 
     show('race-result-layer');
 }
-
 // ===== 排行榜 + 多人隐藏 PB HUD =====
 function updateLocalRanking(){
     var box = document.getElementById('mp-rank');
@@ -1286,7 +1331,7 @@ function updateLocalRanking(){
 
     var list = [];
 
-    list.push({
+    list.push({    
         id: mpState.myId,
         name: playerName || '你',
         lap: g.lap,
