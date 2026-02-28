@@ -1040,6 +1040,29 @@ socket.on('race:finish',function(data){
         p.progress=data.progress||p.progress||1;
     }
 });
+socket.on('race:ended', function () {
+    // 不管本地怎么认为，统统认为比赛已经结束
+    mpState.raceActive = false;
+    g.on = 0;
+
+    var fb = document.getElementById('finish-banner');
+    if (fb) fb.style.display = 'none';
+
+    var rb = document.getElementById('race-finished-banner');
+    if (rb) {
+        rb.style.display = 'block';
+        rb.textContent = '比赛已结束，5秒钟后将返回房间…';
+    }
+
+    setTimeout(function () {
+        if (rb) rb.style.display = 'none';
+        show('multiplayer');
+        g.on = 0;
+        g.lap = 0;
+        g.progress = 0;
+        g.lastProgress = 0;
+    }, 5000);
+});
 
 // ===== 本地判断所有人完赛 → 提示并返回房间 =====
 function checkLocalRaceEnd(){
