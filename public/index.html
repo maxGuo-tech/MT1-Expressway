@@ -135,8 +135,8 @@
         <!-- 多人 HUD 排名：右中部 -->
         <div id="mp-rank"
              style="position:absolute;
-                    top:120px;
-                    right:30px;
+                    bottom:40px;
+                    left:30px;
                     width:260px;
                     background:rgba(0,0,0,0.6);
                     border:2px solid rgba(255,255,255,0.3);
@@ -177,7 +177,24 @@
                     pointer-events:none;">
             您已完赛<br>等待其他玩家冲线…
         </div>
-
+        <!-- 比赛结束自动返回提示 -->
+        <!-- 比赛结束自动返回提示 -->
+        <div id="race-finished-banner"
+             style="position:absolute;
+                    top:40%;
+                    left:50%;
+                    transform:translate(-50%,-50%);
+                    padding:16px 24px;
+                    border-radius:12px;
+                    background:rgba(0,0,0,0.85);
+                    color:#fff;
+                    font-size:22px;
+                    font-weight:bold;
+                    text-align:center;
+                    display:none;
+                    pointer-events:none;">
+            比赛已结束，5秒钟后将返回房间…
+        </div>
         <!-- 移动控制 -->
         <div id="mobile-controls">
             <div class="m-row">
@@ -200,17 +217,6 @@
     </div>
 
     <!-- 多人结算大面板：RACE RESULTS -->
-    <div id="race-result-layer" class="scr" style="display:none;text-align:center;">
-        <div style="margin:auto;max-width:520px;background:rgba(0,0,0,0.9);padding:20px 24px;border-radius:14px;border:2px solid rgba(255,255,255,0.35);box-shadow:0 0 40px rgba(0,0,0,1);">
-            <div style="font-size:24px;font-weight:bold;letter-spacing:2px;margin-bottom:12px;color:#00f0ff;">
-                RACE RESULTS
-            </div>
-            <div id="race-result-content" style="text-align:left;font-size:14px;line-height:1.4;color:#fff;"></div>
-            <div style="margin-top:18px;">
-                <button class="btn" onclick="show('multiplayer')">返回房间</button>
-            </div>
-        </div>
-    </div>
 
     <!-- 世界排行榜 -->
     <div id="leaderboard-layer">
@@ -1049,58 +1055,52 @@ socket.on('race:finish',function(data){
 });
 
 // ========= 本地判断全部完赛 → 进入结算 =========
+// 本地判断所有人完赛 → 显示提示并自动返回房间
 function checkLocalRaceEnd(){
-    if(!mpState.inRoom || !mpState.raceActive) return;
+    if (!mpState.inRoom || !mpState.raceActive) return;
 
-    var ids=Object.keys(mpState.players);
-    if(!ids.length)return;
+    var ids = Object.keys(mpState.players);
+    if (!ids.length) return;
 
-    var allFinished=true;
-    var result=[];
+    var allFinished = true;
+
     ids.forEach(function(id){
-        var p=mpState.players[id];
-        var lap=p.lap||0;
-        var done=p.finished || lap>=g.raceLaps;
-        if(!done) allFinished=false;
-        result.push({
-            id:id,
-            name:p.name,
-            lap:lap,
-            progress:p.progress||0,
-            finished:done,
-            finishTime:p.finishTime||Infinity
-        });
+        var p = mpState.players[id];
+        if (!p) return;
+        var lap = p.lap || 0;
+        var done = p.finished || lap >= g.raceLaps;
+        if (!done) allFinished = false;
     });
 
-    if(!allFinished) return;
+    if (!allFinished) return;
 
-    // 排名：完赛按时间，未完赛按圈数/进度
-    result.sort(function(a,b){
-        if(a.finished && b.finished){
-            return a.finishTime-b.finishTime;
-        }
-        if(a.finished!==b.finished){
-            return a.finished?-1:1;
-        }
-        if(a.lap!==b.lap) return b.lap-a.lap;
-        return b.progress-a.progress;
-    });
+    // 标记比赛结束，停掉更新循环
+    mpState.raceActive = false;
+    g.on = 0;
 
-    mpState.raceActive=false;
-    g.on=0;
+    // 隐藏“您已完赛”
+    var fb = document.getElementById('finish-banner');
+    if (fb) fb.style.display = 'none';
 
-    var html='';
-    result.forEach(function(p,idx){
-        var rank=idx+1;
-        var timeStr=p.finished && p.finishTime<Infinity?fmt(p.finishTime):'--:--.---';
-        var color=rank===1?'#ffd700':(rank===2?'#c0c0c0':(rank===3?'#cd7f32':'#fff'));
-        var meMark=(p.id===mpState.myId)?'<span style="color:#00f0ff;"> (YOU)</span>':'';
-        html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 4px;margin-bottom:4px;border-radius:4px;background:rgba(255,255,255,0.05);color:'+color+';">'+
-              '<div style="min-width:28px;font-weight:bold;">#'+rank+'</div>'+
-              '<div style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">'+p.name+meMark+'</div>'+
-              '<div style="min-width:90px;text-align:right;font-size:13px;color:#eee;">'+timeStr+'</div>'+
-              '</div>';
-    });
+    // 显示“比赛已结束，5秒后返回房间”
+    var rb = document.getElementById('race-finished-banner');
+    if (rb) {
+        rb.style.display = 'block';
+        rb.textContent = '比赛已结束，5秒钟后将返回房间…';
+    }
+
+    // 5 秒后回房间
+    setTimeout(function(){
+        if (rb) rb.style.display = 'none';
+        show('multiplayer');
+        // 清理一下比赛状态，避免下一局脏数据
+        g.on = 0;
+        g.lap = 0;
+        g.progress = 0;
+        g.lastProgress = 0;
+        mpState.raceActive = false;
+    }, 5000);
+}
 
     var cont=document.getElementById('race-result-content');
     if(cont)cont.innerHTML=html;
