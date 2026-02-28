@@ -2,69 +2,65 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>HMCL Racing - Pro Online Edition</title>
-    <!-- 引入 Socket.io -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box;touch-action:none;user-select:none;-webkit-user-select:none;}
         :root { --main: #00f0ff; --bg: #050505; --purple: #d000ff; --green: #00ff00; --yellow: #ffff00; }
         body{background:#000;color:var(--main);font-family:'Courier New',monospace;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:hidden}
-        #game{position:relative;width:1000px;height:700px;border:3px solid var(--main);background: #000;transform-origin: center center;}
+        #game{position:relative;width:1000px;height:700px;border:3px solid var(--main);background:#000;transform-origin:center center;}
         .scr{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,0.95);z-index:100}
         .scr.on{display:flex}
         h1{font-size:56px;color:var(--main);text-shadow:0 0 20px var(--main);margin-bottom:10px;font-style:italic;text-align:center}
         .sub{font-size:18px;color:#fff;margin-bottom:40px;letter-spacing:4px}
-        .btn{background:transparent;border:2px solid var(--main);color:var(--main);padding:15px 50px;font-size:20px;font-family:inherit;cursor:pointer;margin:10px;min-width:240px;transition:all 0.2s;text-transform:uppercase;font-weight:bold}
+        .btn{background:transparent;border:2px solid var(--main);color:var(--main);padding:15px 50px;font-size:20px;font-family:inherit;cursor:pointer;margin:10px;min-width:240px;transition:all .2s;text-transform:uppercase;font-weight:bold}
         .btn:hover{background:var(--main);color:#000;transform:skewX(-10deg)}
-        .row{margin:15px 0;font-size:18px; display: flex; align-items: center; justify-content: center; gap: 20px;}
-        .row label{font-size: 20px; color: #fff;}
-        .row select{background:#000;border:2px solid var(--main);color:var(--main);padding:10px 15px;font-size:16px;font-family:inherit;cursor: pointer;}
+        .row{margin:15px 0;font-size:18px;display:flex;align-items:center;justify-content:center;gap:20px;}
+        .row label{font-size:20px;color:#fff;}
+        .row select{background:#000;border:2px solid var(--main);color:var(--main);padding:10px 15px;font-size:16px;font-family:inherit;cursor:pointer;}
         #hud{position:absolute;top:20px;left:20px;background:rgba(0,0,0,0.8);padding:15px 25px;border-left:4px solid var(--main);font-size:16px;z-index:10;pointer-events:none}
         #hud div{margin:8px 0;color:#fff}
         #hud span{color:var(--main);font-weight:bold}
-        #sectors-ui { position: absolute; top: 20px; right: 20px; display: flex; gap: 5px; z-index: 10; }
-        .sec-box { width: 85px; height: 55px; background: #111; border: 1px solid #444; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        .sec-box span { font-size: 10px; color: #888; }
-        .sec-box div { font-size: 16px; color: #fff; font-weight: bold; }
-        .sec-box.purple { background: var(--purple); }
-        .sec-box.green { background: var(--green); }
-        .sec-box.green div, .sec-box.green span { color: #000; }
-        .sec-box.yellow { background: var(--yellow); }
-        .sec-box.yellow div, .sec-box.yellow span { color: #000; }
+        #sectors-ui{position:absolute;top:20px;right:20px;display:flex;gap:5px;z-index:10;}
+        .sec-box{width:85px;height:55px;background:#111;border:1px solid #444;display:flex;flex-direction:column;justify-content:center;align-items:center;}
+        .sec-box span{font-size:10px;color:#888;}
+        .sec-box div{font-size:16px;color:#fff;font-weight:bold;}
+        .sec-box.purple{background:var(--purple);}
+        .sec-box.green{background:var(--green);}
+        .sec-box.green div,.sec-box.green span{color:#000;}
+        .sec-box.yellow{background:var(--yellow);}
+        .sec-box.yellow div,.sec-box.yellow span{color:#000;}
         #mini{position:absolute;bottom:20px;right:20px;width:200px;height:200px;border:2px solid #333;background:rgba(0,0,0,0.8);z-index:10}
         #cd{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:140px;color:#fff;display:none;z-index:20;font-style:italic;font-weight:bold}
         #lapMsg{position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);font-size:48px;color:#fff;display:none;z-index:15;text-align:center;background:rgba(0,0,0,0.9);padding:30px 60px;border:2px solid var(--main);transform:skewX(-10deg);white-space:nowrap}
-        #mobile-controls { display: none; position: absolute; bottom: 40px; left: 40px; z-index: 100; flex-direction: column; align-items: center; gap: 20px; }
-        .m-row { display: flex; gap: 25px; }
-        .m-btn { width: 110px; height: 110px; background: rgba(0, 0, 0, 0.5); border: 3px solid var(--main); border-radius: 20px; color: var(--main); font-size: 45px; display: flex; justify-content: center; align-items: center; }
-        .m-btn:active { background: var(--main); color: #000; }
+        #mobile-controls{display:none;position:absolute;bottom:40px;left:40px;z-index:100;flex-direction:column;align-items:center;gap:20px;}
+        .m-row{display:flex;gap:25px;}
+        .m-btn{width:110px;height:110px;background:rgba(0,0,0,0.5);border:3px solid var(--main);border-radius:20px;color:var(--main);font-size:45px;display:flex;justify-content:center;align-items:center;}
+        .m-btn:active{background:var(--main);color:#000;}
         canvas{display:block}
-        #auth-screen { position: fixed; top:0; left:0; width:100%; height:100%; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .auth-box { border: 2px solid #00f0ff; padding: 40px; background: rgba(0,240,255,0.05); display: flex; flex-direction: column; gap: 15px; width: 350px; }
-        .auth-box input { background: #000; border: 1px solid #00f0ff; color: #fff; padding: 10px; font-family: monospace; }
-        #leaderboard-layer { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.95); z-index: 500; display: none; flex-direction: column; align-items: center; padding-top: 50px; }
-        .lb-table { width: 80%; border-collapse: collapse; margin-top: 20px; color: #fff; font-family: monospace; }
-        .lb-table th { border-bottom: 2px solid #00f0ff; padding: 10px; color: #00f0ff; text-align: left; }
-        .lb-table td { padding: 12px; border-bottom: 1px solid #222; cursor: pointer; }
-        #compare-layer { position: absolute; top: 15%; width: 500px; background: #050505; border: 2px solid #d000ff; padding: 20px; z-index: 600; display: none; box-shadow: 0 0 30px rgba(208,0,255,0.3); }
-        .comp-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; text-align: center; margin-top: 15px; }
+        #auth-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+        .auth-box{border:2px solid #00f0ff;padding:40px;background:rgba(0,240,255,0.05);display:flex;flex-direction:column;gap:15px;width:350px;}
+        .auth-box input{background:#000;border:1px solid #00f0ff;color:#fff;padding:10px;font-family:monospace;}
+        #leaderboard-layer{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.95);z-index:500;display:none;flex-direction:column;align-items:center;padding-top:50px;}
+        .lb-table{width:80%;border-collapse:collapse;margin-top:20px;color:#fff;font-family:monospace;}
+        .lb-table th{border-bottom:2px solid #00f0ff;padding:10px;color:#00f0ff;text-align:left;}
+        .lb-table td{padding:12px;border-bottom:1px solid #222;cursor:pointer;}
+        #compare-layer{position:absolute;top:15%;width:500px;background:#050505;border:2px solid #d000ff;padding:20px;z-index:600;display:none;box-shadow:0 0 30px rgba(208,0,255,0.3);}
+        .comp-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;margin-top:15px;}
     </style>
 </head>
 <body>
-<!-- 1. 账号层 -->
+<!-- 登录层 -->
 <div id="auth" class="scr on">
   <h1>ELECTRON<br>EXPRESSWAY</h1>
   <div class="sub">Login to save your PB</div>
   <div style="margin-top:20px">
-    <input id="login-username"
-           type="text"
-           placeholder="Username"
+    <input id="login-username" type="text" placeholder="Username"
            style="padding:8px 10px;margin-bottom:10px;width:200px">
     <br>
-    <input id="login-password"
-           type="password"
-           placeholder="Password"
+    <input id="login-password" type="password" placeholder="Password"
            style="padding:8px 10px;margin-bottom:10px;width:200px">
   </div>
   <button class="btn" onclick="handleAuth()">LOGIN</button>
@@ -106,16 +102,16 @@
       </div>
       <div id="mp-status" style="margin-top:10px;color:#ccc;font-size:14px;"></div>
       <div id="mp-player-list" style="margin-top:10px;color:#fff;font-size:14px;"></div>
-      <div id="mp-owner-controls" style="margin-top:15px; display:none;">
+      <div id="mp-owner-controls" style="margin-top:15px;display:none;">
         <button class="btn" onclick="startMultiplayerRace()">开始比赛</button>
       </div>
     </div>
 
-    <!-- 设置 / PB -->
+    <!-- 设置 -->
     <div id="settings" class="scr">
         <h1 style="font-size:36px">SESSION INFO</h1>
-        <div style="margin:20px 0; color:#fff; text-align:center; border: 1px solid #333; padding: 20px;">
-            <p style="color:var(--main); margin-bottom:10px">PERSONAL BEST RECORDS:</p>
+        <div style="margin:20px 0;color:#fff;text-align:center;border:1px solid #333;padding:20px;">
+            <p style="color:var(--main);margin-bottom:10px">PERSONAL BEST RECORDS:</p>
             <button class="btn" onclick="resetPB()">RESET PB</button>
             <div id="pb-display">Loading...</div>
         </div>
@@ -129,7 +125,7 @@
         <button class="btn" onclick="saveSettings()" style="margin-top:20px">✓ BACK</button>
     </div>
 
-    <!-- 游戏进行中 -->
+    <!-- 游戏 -->
     <div id="play" class="scr">
         <canvas id="cv"></canvas>
         <div id="hud">
@@ -139,7 +135,7 @@
             <div>BEST PB: <span id="best">--:--.---</span></div>
         </div>
 
-        <!-- 多人排行榜：右中部 -->
+        <!-- 多人 HUD 排行榜（右中部） -->
         <div id="mp-rank"
              style="position:absolute;
                     top:120px;
@@ -167,25 +163,7 @@
         <div id="cd">3</div>
         <div id="lapMsg"></div>
 
-        <!-- 完赛后等待提示 -->
-        <div id="finish-banner"
-             style="position:absolute;
-                    top:40%;
-                    left:50%;
-                    transform:translate(-50%,-50%);
-                    padding:16px 24px;
-                    border-radius:12px;
-                    background:rgba(0,0,0,0.75);
-                    color:#fff;
-                    font-size:22px;
-                    font-weight:bold;
-                    text-align:center;
-                    display:none;
-                    pointer-events:none;">
-            您已完赛<br>等待其他玩家冲线…
-        </div>
-
-        <!-- 移动端控制 -->
+        <!-- 移动控制 -->
         <div id="mobile-controls">
             <div class="m-row">
                 <div class="m-btn" data-k="w">▲</div>
@@ -201,28 +179,25 @@
     <!-- 单人结束 -->
     <div id="end" class="scr">
         <h1 style="font-size:42px">SESSION END</h1>
-        <div id="end-result" style="margin:30px 0;font-size:22px; text-align:center"></div>
+        <div id="end-result" style="margin:30px 0;font-size:22px;text-align:center"></div>
         <button class="btn" onclick="startGame()">🔄 TRY AGAIN</button>
         <button class="btn" onclick="show('menu')">← MENU</button>
     </div>
 
-    <!-- 多人结算面板 -->
-    <div id="race-result-layer" class="scr" style="display:none; text-align:center;">
-        <div style="margin:auto; max-width:480px; background:rgba(0,0,0,0.85); padding:20px 24px; border-radius:12px; border:2px solid rgba(255,255,255,0.3); box-shadow:0 0 30px rgba(0,0,0,0.9);">
-            <div style="font-size:22px; font-weight:bold; letter-spacing:2px; margin-bottom:10px; color:#00f0ff;">
-                RACE RESULTS
+    <!-- 多人最终排行榜（大面板，居中） -->
+    <div id="final-rank-layer" class="scr" style="display:none;text-align:center;">
+        <div style="margin:auto;max-width:520px;background:rgba(0,0,0,0.9);padding:20px 24px;border-radius:14px;border:2px solid rgba(255,255,255,0.35);box-shadow:0 0 40px rgba(0,0,0,1);">
+            <div style="font-size:24px;font-weight:bold;letter-spacing:2px;margin-bottom:12px;color:#00f0ff;">
+                FINAL STANDINGS
             </div>
-            <div id="race-result-content" style="text-align:left; font-size:14px; line-height:1.4; color:#fff;"></div>
-            <div style="margin-top:16px; font-size:12px; color:#aaa;">
-                房主可以在房间内发起下一轮比赛，或玩家自行选择退出房间。
-            </div>
+            <div id="final-rank-content" style="text-align:left;font-size:14px;line-height:1.4;color:#fff;"></div>
             <div style="margin-top:18px;">
                 <button class="btn" onclick="show('multiplayer')">返回房间</button>
             </div>
         </div>
     </div>
 
-    <!-- 世界排行榜层 -->
+    <!-- 世界排行榜 -->
     <div id="leaderboard-layer">
         <h1>WORLD RECORDS</h1>
         <table class="lb-table"><tbody id="lb-body"></tbody></table>
@@ -236,7 +211,7 @@
 </div>
 
 <script>
-// ===== 全局与初始化 =====
+// ===== 基础状态 =====
 var playerName = localStorage.getItem('hmcl_playerName') || '';
 var cfg = { laps: 1, camMode: 0 };
 
@@ -261,36 +236,34 @@ var g = {
     pb: { lap: Infinity, s1: Infinity, s2: Infinity, s3: Infinity },
     currentSplitIdx: 0,
     uiTimeouts: [],
-    mode: 'single',      // 'single' / 'multi'
+    mode: 'single',
     raceLaps: 1
 };
 
 var lastTime = 0;
 
-// ===== Socket 与多人状态 =====
+// ===== 多人状态 =====
 var mpState = {
-    inRoom: false,
-    roomId: null,
-    isOwner: false,
-    maxPlayers: 4,
-    laps: 3,
-    password: '',
-    players: {}, // { id: { name, car, progress, lap, finished, finishTime } }
-    myId: null,
-    raceActive: false,
-    lastPosSend: 0
+    inRoom:false,
+    roomId:null,
+    isOwner:false,
+    maxPlayers:4,
+    laps:3,
+    password:'',
+    players:{}, // {id:{name,car,progress,lap,finished,finishTime}}
+    myId:null,
+    raceActive:false,
+    lastPosSend:0
 };
 
 var socket = io("https://mt1-expressway.onrender.com", {
-    transports: ['websocket', 'polling']
+    transports:['websocket','polling']
 });
-
 socket.on("connect", function(){
-    console.log("已成功连接到服务器！ID:", socket.id);
     mpState.myId = socket.id;
 });
 
-// ===== 小工具 =====
+// ===== 工具函数 =====
 function fmt(ms){
     var m=Math.floor(ms/60000),
         s=Math.floor(ms%60000/1000),
@@ -300,182 +273,155 @@ function fmt(ms){
            (l<100?'0':'')+(l<10?'0':'')+l;
 }
 function show(id){
-    var all = document.querySelectorAll('.scr');
+    var all=document.querySelectorAll('.scr');
     for(var i=0;i<all.length;i++) all[i].classList.remove('on');
-    var el = document.getElementById(id);
-    if (el) el.classList.add('on');
+    var el=document.getElementById(id);
+    if(el) el.classList.add('on');
 }
 function isMobile(){
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
-        .test(navigator.userAgent);
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
-function resize() {
-    var game = document.getElementById('game');
-    if (!game) return;
-    var ww = window.innerWidth, wh = window.innerHeight;
-    var ratio = Math.min(ww/1000, wh/700);
-    game.style.transform = 'scale(' + ratio + ')';
+function resize(){
+    var game=document.getElementById('game');
+    if(!game) return;
+    var ww=window.innerWidth, wh=window.innerHeight;
+    var ratio=Math.min(ww/1000, wh/700);
+    game.style.transform='scale('+ratio+')';
 }
-window.addEventListener('resize', resize);
-resize();
+window.addEventListener('resize',resize);resize();
 
-// ===== 键盘与移动控制 =====
-document.onkeydown = function(e){
-    if(!e || !e.key) return;
-    var k = e.key.toLowerCase();
-    if(k=='w'||k=='arrowup')    keys.w=1;
-    if(k=='a'||k=='arrowleft')  keys.a=1;
-    if(k=='s'||k=='arrowdown')  keys.s=1;
-    if(k=='d'||k=='arrowright') keys.d=1;
+// ===== 键盘 / 触摸 =====
+document.onkeydown=function(e){
+    if(!e||!e.key)return;
+    var k=e.key.toLowerCase();
+    if(k=='w'||k=='arrowup')keys.w=1;
+    if(k=='a'||k=='arrowleft')keys.a=1;
+    if(k=='s'||k=='arrowdown')keys.s=1;
+    if(k=='d'||k=='arrowright')keys.d=1;
 };
-document.onkeyup = function(e){
-    if(!e || !e.key) return;
-    var k = e.key.toLowerCase();
-    if(k=='w'||k=='arrowup')    keys.w=0;
-    if(k=='a'||k=='arrowleft')  keys.a=0;
-    if(k=='s'||k=='arrowdown')  keys.s=0;
-    if(k=='d'||k=='arrowright') keys.d=0;
+document.onkeyup=function(e){
+    if(!e||!e.key)return;
+    var k=e.key.toLowerCase();
+    if(k=='w'||k=='arrowup')keys.w=0;
+    if(k=='a'||k=='arrowleft')keys.a=0;
+    if(k=='s'||k=='arrowdown')keys.s=0;
+    if(k=='d'||k=='arrowright')keys.d=0;
 };
 
-if (isMobile()) {
-    var mcWrap = document.getElementById('mobile-controls');
-    if (mcWrap) mcWrap.style.display = 'flex';
-    var btns = document.querySelectorAll('.m-btn');
+if(isMobile()){
+    var mcWrap=document.getElementById('mobile-controls');
+    if(mcWrap) mcWrap.style.display='flex';
+    var btns=document.querySelectorAll('.m-btn');
     btns.forEach(function(btn){
-        var k = btn.getAttribute('data-k');
-        btn.addEventListener('touchstart', function(e){ e.preventDefault(); keys[k]=1; }, {passive:false});
-        btn.addEventListener('touchend',   function(e){ e.preventDefault(); keys[k]=0; }, {passive:false});
+        var k=btn.getAttribute('data-k');
+        btn.addEventListener('touchstart',function(e){e.preventDefault();keys[k]=1;},{passive:false});
+        btn.addEventListener('touchend',function(e){e.preventDefault();keys[k]=0;},{passive:false});
     });
 }
 
 // ===== 设置 / PB =====
 (function loadSettings(){
-    try {
-        var s = localStorage.getItem('hmcl_settings');
-        if (s) {
-            var d = JSON.parse(s);
-            if (typeof d.camMode === 'number') cfg.camMode = d.camMode;
-            if (typeof d.laps    === 'number') cfg.laps    = d.laps;
+    try{
+        var s=localStorage.getItem('hmcl_settings');
+        if(s){
+            var d=JSON.parse(s);
+            if(typeof d.camMode==='number') cfg.camMode=d.camMode;
+            if(typeof d.laps==='number')    cfg.laps=d.laps;
         }
-    } catch(e) { console.error('读取设置失败', e); }
+    }catch(e){}
 })();
 
 function saveSettings(){
-    cfg.camMode = parseInt(document.getElementById('camMode').value, 10);
-    cfg.laps    = parseInt(document.getElementById('laps')?.value || cfg.laps, 10);
-    localStorage.setItem('hmcl_settings', JSON.stringify(cfg));
+    var camSel=document.getElementById('camMode');
+    if(camSel) cfg.camMode=parseInt(camSel.value,10);
+    localStorage.setItem('hmcl_settings',JSON.stringify(cfg));
     show('menu');
 }
-function showSettings(){
-    var camSel  = document.getElementById('camMode');
-    if (camSel) camSel.value = String(cfg.camMode);
-    loadLeaderboard();
-    show('settings');
-}
 function loadPB(){
-    try {
-        var saved = localStorage.getItem('hmcl_racing_pb');
-        if (saved) {
-            var d = JSON.parse(saved);
-            if (typeof d.lap === 'number') {
-                g.pb = {
-                    lap: d.lap,
-                    s1: typeof d.s1 === 'number' ? d.s1 : Infinity,
-                    s2: typeof d.s2 === 'number' ? d.s2 : Infinity,
-                    s3: typeof d.s3 === 'number' ? d.s3 : Infinity
+    try{
+        var saved=localStorage.getItem('hmcl_racing_pb');
+        if(saved){
+            var d=JSON.parse(saved);
+            if(typeof d.lap==='number'){
+                g.pb={
+                    lap:d.lap,
+                    s1:typeof d.s1==='number'?d.s1:Infinity,
+                    s2:typeof d.s2==='number'?d.s2:Infinity,
+                    s3:typeof d.s3==='number'?d.s3:Infinity
                 };
             }
         }
-    } catch (e) { console.error('读取 PB 失败:', e); }
+    }catch(e){}
 }
 function loadLeaderboard(){
     loadPB();
-    var display = document.getElementById('pb-display');
-    if (!display) return;
-    display.innerHTML = "Fetching Global Leaderboard...";
+    var display=document.getElementById('pb-display');
+    if(!display)return;
+    display.innerHTML="Fetching Global Leaderboard...";
     fetch('https://mt1-expressway.onrender.com/api/leaderboard')
-        .then(function(res){
-            if (!res.ok) throw new Error('HTTP '+res.status);
-            return res.json();
-        })
+        .then(function(res){if(!res.ok)throw new Error();return res.json();})
         .then(function(data){
-            var html = '<div style="text-align:left;display:inline-block;">';
-            if (!data || !data.length) {
-                html += '暂无记录！';
-            } else {
+            var html='<div style="text-align:left;display:inline-block;">';
+            if(!data||!data.length){
+                html+='暂无记录！';
+            }else{
                 data.forEach(function(p,i){
-                    var isMe = (p.name === playerName) ? 'color:var(--main);' : 'color:#fff;';
-                    html += '<div style="'+isMe+' margin-bottom:5px;">' +
-                            '#'+(i+1)+' <b>'+p.name+'</b> - '+fmt(p.lap)+'<br>' +
-                            '<span style="font-size:12px;color:#888">' +
-                            'S1: '+(p.s1/1000).toFixed(2)+'s | '+
-                            'S2: '+(p.s2/1000).toFixed(2)+'s | '+
-                            'S3: '+(p.s3/1000).toFixed(2)+'s' +
-                            '</span></div>';
+                    var isMe=(p.name===playerName)?'color:var(--main);':'color:#fff;';
+                    html+='<div style="'+isMe+' margin-bottom:5px;">#'+(i+1)+' <b>'+p.name+
+                           '</b> - '+fmt(p.lap)+'<br><span style="font-size:12px;color:#888">S1: '+
+                           (p.s1/1000).toFixed(2)+'s | S2: '+(p.s2/1000).toFixed(2)+
+                           's | S3: '+(p.s3/1000).toFixed(2)+'s</span></div>';
                 });
             }
-            html += '</div>';
-            display.innerHTML = html;
-            var bestEl = document.getElementById('best');
-            if (bestEl)
-                bestEl.textContent = g.pb.lap < 1e9 ? fmt(g.pb.lap) : '--:--.---';
+            html+='</div>';
+            display.innerHTML=html;
+            var bestEl=document.getElementById('best');
+            if(bestEl) bestEl.textContent=g.pb.lap<1e9?fmt(g.pb.lap):'--:--.---';
         })
-        .catch(function(err){
-            console.error('加载排行榜失败:', err);
-            display.innerHTML = "无法连接排行榜服务器";
-        });
+        .catch(function(){display.innerHTML="无法连接排行榜服务器";});
 }
 function resetPB(){
-    if (!confirm('确定要清空你的个人最好成绩吗？此操作不可撤销。')) return;
-    g.pb = { lap: Infinity, s1: Infinity, s2: Infinity, s3: Infinity };
+    if(!confirm('确定要清空你的个人最好成绩吗？此操作不可撤销。'))return;
+    g.pb={lap:Infinity,s1:Infinity,s2:Infinity,s3:Infinity};
     localStorage.removeItem('hmcl_racing_pb');
-    var bestEl = document.getElementById('best');
-    if (bestEl) bestEl.textContent = '--:--.---';
+    var bestEl=document.getElementById('best');
+    if(bestEl)bestEl.textContent='--:--.---';
     resetSectorUI();
-    if (playerName) {
-        fetch('https://mt1-expressway.onrender.com/api/leaderboard/' +
-              encodeURIComponent(playerName), { method:'DELETE' })
-        .then(function(r){
-            if (!r.ok) throw new Error('HTTP '+r.status);
-            return r.json().catch(function(){ return {}; });
-        })
-        .then(function(){ loadLeaderboard(); })
-        .catch(function(err){
-            console.error('清空服务器 PB 失败:', err);
-        });
+    if(playerName){
+        fetch('https://mt1-expressway.onrender.com/api/leaderboard/'+encodeURIComponent(playerName),
+              {method:'DELETE'}).finally(loadLeaderboard);
     }
+}
+function showSettings(){
+    var camSel=document.getElementById('camMode');
+    if(camSel)camSel.value=String(cfg.camMode);
+    loadLeaderboard();
+    show('settings');
 }
 
 // ===== 登录 =====
 function handleAuth(){
-    var uInput = document.getElementById('login-username');
-    var pInput = document.getElementById('login-password');
-    if (!uInput || !pInput) {
-        alert('找不到登录输入框');
-        return;
-    }
-    var username = (uInput.value || '').trim();
-    var password = (pInput.value || '').trim();
-    if (!username || !password) {
-        alert('账号和密码都要填');
-        return;
-    }
-    playerName = username;
-    localStorage.setItem('hmcl_playerName', playerName);
-    socket.emit('login', { username: username, password: password });
+    var u=document.getElementById('login-username');
+    var p=document.getElementById('login-password');
+    var username=(u.value||'').trim();
+    var password=(p.value||'').trim();
+    if(!username||!password){alert('账号和密码都要填');return;}
+    playerName=username;
+    localStorage.setItem('hmcl_playerName',playerName);
+    socket.emit('login',{username:username,password:password});
     show('menu');
 }
 function closeLB(){
-    var lb = document.getElementById('leaderboard-layer');
-    if (lb) lb.style.display = 'none';
+    var lb=document.getElementById('leaderboard-layer');
+    if(lb)lb.style.display='none';
 }
 
 // ===== 赛道与计时 =====
 function makeTrack(){
-    var p = [], x=0, y=0, a=0, splits=[];
-    function addSeg(type, val1, val2, val3){
-        if (type==='s'){
-            var st = Math.ceil(val1/50);
+    var p=[],x=0,y=0,a=0,splits=[];
+    function addSeg(type,val1,val2,val3){
+        if(type==='s'){
+            var st=Math.ceil(val1/50);
             for(var j=0;j<st;j++){
                 p.push({x:x,y:y,a:a});
                 x+=Math.cos(a)*50;
@@ -500,7 +446,7 @@ function makeTrack(){
     addSeg('s',600);
     addSeg('c',400,Math.PI*0.3,1);
     addSeg('s',800);
-    splits.push(p.length); // S1
+    splits.push(p.length);
 
     addSeg('c',500,Math.PI*0.4,-1);
     addSeg('s',1500);
@@ -510,7 +456,7 @@ function makeTrack(){
     addSeg('s',1200);
     addSeg('c',500,Math.PI*0.3,1);
     addSeg('s',800);
-    splits.push(p.length); // S2
+    splits.push(p.length);
 
     addSeg('c',600,Math.PI*0.5,-1);
     addSeg('s',3000);
@@ -518,296 +464,249 @@ function makeTrack(){
     addSeg('s',5500);
     addSeg('c',700,Math.PI*0.5,-1);
 
-    var sx=0, sy=0;
-    var lp=p[p.length-1];
+    var sx=0,sy=0,lp=p[p.length-1];
     var dist=Math.hypot(sx-lp.x,sy-lp.y);
     var cls=Math.ceil(dist/50);
     for(var i=1;i<=cls;i++){
-        var t=i/cls, t2=t*t*(3-2*t);
-        p.push({
-            x: lp.x+(sx-lp.x)*t2,
-            y: lp.y+(sy-lp.y)*t2,
-            a: a+(0-a)*t
-        });
+        var t=i/cls,t2=t*t*(3-2*t);
+        p.push({x:lp.x+(sx-lp.x)*t2,y:lp.y+(sy-lp.y)*t2,a:a+(0-a)*t});
     }
-    g.splitIndices = splits;
+    g.splitIndices=splits;
     return p;
 }
 function resetSectorUI(){
     for(var i=1;i<=3;i++){
-        var box  = document.getElementById('s'+i+'-box');
-        var time = document.getElementById('s'+i+'-time');
-        if (!box || !time) continue;
-        box.className = 'sec-box';
-        time.textContent = '--.--';
+        var box=document.getElementById('s'+i+'-box');
+        var t=document.getElementById('s'+i+'-time');
+        if(!box||!t)continue;
+        box.className='sec-box';
+        t.textContent='--.--';
     }
 }
 function recordSector(secIdx){
-    var now = Date.now();
-    var secTime = now - g.secStartTime;
-    g.curSecTimes[secIdx] = secTime;
-    g.secStartTime = now;
-    g.currentSplitIdx = secIdx + 1;
-    updateSectorUI(secIdx, secTime);
+    var now=Date.now();
+    var secTime=now-g.secStartTime;
+    g.curSecTimes[secIdx]=secTime;
+    g.secStartTime=now;
+    g.currentSplitIdx=secIdx+1;
+    updateSectorUI(secIdx,secTime);
 }
 function updateSectorUI(secIdx,time){
-    var box  = document.getElementById('s'+(secIdx+1)+'-box');
-    var el   = document.getElementById('s'+(secIdx+1)+'-time');
-    if (!box || !el) return;
-    el.textContent = (time/1000).toFixed(2);
-    var pbSec = (secIdx===0?g.pb.s1:(secIdx===1?g.pb.s2:g.pb.s3));
-    box.className = 'sec-box';
-    if (pbSec < Infinity){
-        if (time < pbSec) box.classList.add('purple');
-        else              box.classList.add('yellow');
-        var diff = time - pbSec;
-        var diffStr = (diff>0?'+':'-') + (Math.abs(diff)/1000).toFixed(2);
-        var t = setTimeout(function(){ el.textContent = diffStr; },1500);
-        g.uiTimeouts.push(t);
+    var box=document.getElementById('s'+(secIdx+1)+'-box');
+    var el=document.getElementById('s'+(secIdx+1)+'-time');
+    if(!box||!el)return;
+    el.textContent=(time/1000).toFixed(2);
+    var pbSec=(secIdx===0?g.pb.s1:(secIdx===1?g.pb.s2:g.pb.s3));
+    box.className='sec-box';
+    if(pbSec<Infinity){
+        box.classList.add(time<pbSec?'purple':'yellow');
     }else{
         box.classList.add('green');
     }
 }
 function showLapTime(lapNum,time){
-    var el = document.getElementById('lapMsg');
-    if (!el) return;
-    el.innerHTML = 'FINISH!<br>'+(time/1000).toFixed(3)+'s';
-    el.style.display = 'block';
+    var el=document.getElementById('lapMsg');
+    if(!el)return;
+    el.innerHTML='FINISH!<br>'+(time/1000).toFixed(3)+'s';
+    el.style.display='block';
 }
 function endGame(){
-    if (g.mode === 'multi') return;
-    g.on = 0;
-    var lt = Date.now() - g.lt;
-    var res = document.getElementById('end-result');
-    if (res){
-        res.innerHTML = 'TIME: '+fmt(lt);
-        if (lt <= g.pb.lap)
-            res.innerHTML += '<br><span style="color:var(--purple)">NEW PERSONAL BEST!</span>';
+    if(g.mode==='multi')return;
+    g.on=0;
+    var lt=Date.now()-g.lt;
+    var res=document.getElementById('end-result');
+    if(res){
+        res.innerHTML='TIME: '+fmt(lt);
+        if(lt<=g.pb.lap)
+            res.innerHTML+='<br><span style="color:var(--purple)">NEW PERSONAL BEST!</span>';
     }
     show('end');
 }
 
 // ===== 倒计时 =====
 function countdown(onFinish){
-    var el = document.getElementById('cd');
-    if (!el){
-        if (onFinish) onFinish();
-        return;
-    }
-    el.style.display='block';
-    el.style.color='#fff';
-    var n = 3;
-    el.textContent = n;
-    var iv = setInterval(function(){
+    var el=document.getElementById('cd');
+    if(!el){if(onFinish)onFinish();return;}
+    el.style.display='block';el.style.color='#fff';
+    var n=3;el.textContent=n;
+    var iv=setInterval(function(){
         n--;
-        if (n>0){
-            el.textContent = n;
-        }else if (n===0){
-            el.textContent = 'GO!';
-            el.style.color = '#0f0';
-        }else{
-            clearInterval(iv);
-            el.style.display='none';
-            if (onFinish) onFinish();
-        }
+        if(n>0)el.textContent=n;
+        else if(n===0){el.textContent='GO!';el.style.color='#0f0';}
+        else{clearInterval(iv);el.style.display='none';if(onFinish)onFinish();}
     },800);
 }
 
+// ===== 准备和开局 =====
 function prepareRace(){
-    track = makeTrack();
-    var stIdx = 5;
-    var st    = track[stIdx];
-    var nx    = track[stIdx+5];
-    var baseAngle = Math.atan2(nx.y-st.y, nx.x-st.x);
-
-    car = {
-        x: st.x,
-        y: st.y,
-        a: baseAngle,
-        s:0, vx:0, vy:0
-    };
-    cam = { x:car.x, y:car.y, zoom:0.4 };
-
-    g.on = 0;
-    g.lap = 0;
-    g.progress = 0;
-    g.lastProgress = 0;
-    g.curSecTimes = [0,0,0];
-    g.currentSplitIdx = 0;
-    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts = [];
+    track=makeTrack();
+    var stIdx=5,st=track[stIdx],nx=track[stIdx+5];
+    var baseAngle=Math.atan2(nx.y-st.y,nx.x-st.x);
+    car={x:st.x,y:st.y,a:baseAngle,s:0,vx:0,vy:0};
+    cam={x:car.x,y:car.y,zoom:0.4};
+    g.on=0;g.lap=0;g.progress=0;g.lastProgress=0;
+    g.curSecTimes=[0,0,0];g.currentSplitIdx=0;
+    g.uiTimeouts.forEach(clearTimeout);g.uiTimeouts=[];
     resetSectorUI();
-
-    var lapEl  = document.getElementById('lap');
-    var lapMsg = document.getElementById('lapMsg');
-    if (lapEl)  lapEl.textContent = '0';
-    if (lapMsg) lapMsg.style.display = 'none';
-
-    var fb = document.getElementById('finish-banner');
-    if (fb) fb.style.display = 'none';
+    var lapEl=document.getElementById('lap');
+    var lapMsg=document.getElementById('lapMsg');
+    if(lapEl)lapEl.textContent='0';
+    if(lapMsg)lapMsg.style.display='none';
 }
-function startRace(mode, laps){
-    g.mode     = mode || 'single';
-    g.raceLaps = laps || cfg.laps;
-    g.on       = 1;
-    g.st = g.lt = g.secStartTime = Date.now();
-    lastTime = performance.now();
+function startRace(mode,laps){
+    g.mode=mode||'single';
+    g.raceLaps=laps||cfg.laps;
+    g.on=1;
+    g.st=g.lt=g.secStartTime=Date.now();
+    lastTime=performance.now();
     requestAnimationFrame(loop);
 }
 
 // ===== 主循环 =====
 function loop(now){
-    if (!g.on) return;
-    if (!lastTime) lastTime = now;
-    var dt = (now-lastTime)/16.667;
-    if (dt>2) dt=2;
-    lastTime = now;
+    if(!g.on)return;
+    if(!lastTime)lastTime=now;
+    var dt=(now-lastTime)/16.667;
+    if(dt>2)dt=2;
+    lastTime=now;
     update(dt);
     draw();
     requestAnimationFrame(loop);
 }
 
 function update(dt){
-    var ms=18, ac=0.25, br=0.4, tr=0.06, fr=0.01, dr=0.96;
+    var ms=18,ac=0.25,br=0.4,tr=0.06,fr=0.01,dr=0.96;
 
-    var allowDrive = !(
-        g.mode === 'multi' &&
-        mpState.players[mpState.myId] &&
-        mpState.players[mpState.myId].finished
-    );
+    // 多人模式下：自己一旦完赛就完全停住（不能继续计圈，保证马上看到最终榜）
+    var mePlayer=mpState.players[mpState.myId];
+    var selfFinished = g.mode==='multi' && mePlayer && mePlayer.finished;
 
-    if (allowDrive){
-        if (keys.w) car.s = Math.min(car.s + ac*dt, ms);
-        if (keys.s) car.s = Math.max(car.s - br*dt, -ms*0.3);
-
-        if (!keys.w && !keys.s){
-            if (car.s>0) car.s = Math.max(0,  car.s - fr*dt);
-            else         car.s = Math.min(0,  car.s + fr*dt);
+    if(!selfFinished){
+        if(keys.w)car.s=Math.min(car.s+ac*dt,ms);
+        if(keys.s)car.s=Math.max(car.s-br*dt,-ms*0.3);
+        if(!keys.w&&!keys.s){
+            if(car.s>0)car.s=Math.max(0,car.s-fr*dt);
+            else       car.s=Math.min(0,car.s+fr*dt);
         }
-
-        var sr = Math.abs(car.s)/ms;
-        var tf = 0.4 + sr*0.6;
-        if (keys.a) car.a -= tr*tf*dt;
-        if (keys.d) car.a += tr*tf*dt;
+        var sr=Math.abs(car.s)/ms;
+        var tf=0.4+sr*0.6;
+        if(keys.a)car.a-=tr*tf*dt;
+        if(keys.d)car.a+=tr*tf*dt;
     }
 
-    var tx = Math.cos(car.a)*car.s;
-    var ty = Math.sin(car.a)*car.s;
-    var dragFactor = Math.pow(dr,dt);
-    car.vx = car.vx*dragFactor + tx*(1-dragFactor);
-    car.vy = car.vy*dragFactor + ty*(1-dragFactor);
-    car.x += car.vx*dt;
-    car.y += car.vy*dt;
+    var tx=Math.cos(car.a)*car.s;
+    var ty=Math.sin(car.a)*car.s;
+    var dragFactor=Math.pow(dr,dt);
+    car.vx=car.vx*dragFactor+tx*(1-dragFactor);
+    car.vy=car.vy*dragFactor+ty*(1-dragFactor);
+    car.x+=car.vx*dt;
+    car.y+=car.vy*dt;
 
-    var md=1e9, ni=0, np=null;
-    var startIdx = Math.floor(g.progress*track.length);
+    var md=1e9,ni=0,np=null;
+    var startIdx=Math.floor(g.progress*track.length);
     for(var j=-250;j<250;j++){
-        var idx = (startIdx+j+track.length)%track.length;
-        var pt = track[idx];
-        var d = Math.hypot(car.x-pt.x, car.y-pt.y);
-        if (d<md){ md=d; ni=idx; np=pt; }
+        var idx=(startIdx+j+track.length)%track.length;
+        var pt=track[idx];
+        var d=Math.hypot(car.x-pt.x,car.y-pt.y);
+        if(d<md){md=d;ni=idx;np=pt;}
     }
-    if (np && md>tw){
-        car.s *= Math.pow(0.85,dt);
-        car.x += (np.x-car.x)*0.2*dt;
-        car.y += (np.y-car.y)*0.2*dt;
+    if(np&&md>tw){
+        car.s*=Math.pow(0.85,dt);
+        car.x+=(np.x-car.x)*0.2*dt;
+        car.y+=(np.y-car.y)*0.2*dt;
     }
 
-    if (allowDrive){
-        g.lastProgress = g.progress;
-        g.progress = ni/track.length;
+    if(!selfFinished){
+        g.lastProgress=g.progress;
+        g.progress=ni/track.length;
 
-        var curIdx  = ni;
-        var prevIdx = Math.floor(g.lastProgress*track.length);
-        for (var sIdx=0;sIdx<2;sIdx++){
-            var sp = g.splitIndices[sIdx];
-            if (g.currentSplitIdx===sIdx && curIdx>=sp && prevIdx<sp)
+        var curIdx=ni;
+        var prevIdx=Math.floor(g.lastProgress*track.length);
+        for(var sIdx=0;sIdx<2;sIdx++){
+            var sp=g.splitIndices[sIdx];
+            if(g.currentSplitIdx===sIdx && curIdx>=sp && prevIdx<sp)
                 recordSector(sIdx);
         }
 
-        if (g.lastProgress>0.9 && g.progress<0.1){
-            var lapTime = Date.now()-g.lt;
+        // 过起终点
+        if(g.lastProgress>0.9 && g.progress<0.1){
+            var lapTime=Date.now()-g.lt;
             recordSector(2);
             g.lap++;
-            var lapEl2 = document.getElementById('lap');
-            if (lapEl2) lapEl2.textContent = g.lap;
-            showLapTime(g.lap, lapTime);
+            var lapEl2=document.getElementById('lap');
+            if(lapEl2)lapEl2.textContent=g.lap;
+            showLapTime(g.lap,lapTime);
 
-            var finishedThisLap = (g.lap >= g.raceLaps);
+            var finishedThisLap=(g.lap>=g.raceLaps);
 
-            if (lapTime < g.pb.lap){
-                g.pb = {
-                    lap: lapTime,
-                    s1 : g.curSecTimes[0],
-                    s2 : g.curSecTimes[1],
-                    s3 : g.curSecTimes[2]
-                };
-                localStorage.setItem('hmcl_racing_pb', JSON.stringify(g.pb));
-
-                fetch('https://mt1-expressway.onrender.com/api/leaderboard', {
+            // 单人 PB
+            if(lapTime<g.pb.lap){
+                g.pb={lap:lapTime,s1:g.curSecTimes[0],s2:g.curSecTimes[1],s3:g.curSecTimes[2]};
+                localStorage.setItem('hmcl_racing_pb',JSON.stringify(g.pb));
+                fetch('https://mt1-expressway.onrender.com/api/leaderboard',{
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({
-                        name:playerName,
-                        lap:g.pb.lap,
-                        s1:g.pb.s1,
-                        s2:g.pb.s2,
-                        s3:g.pb.s3
-                    })
-                }).catch(function(err){ console.error('上传排行榜失败:',err); });
+                    body:JSON.stringify({name:playerName,lap:g.pb.lap,s1:g.pb.s1,s2:g.pb.s2,s3:g.pb.s3})
+                }).catch(function(){});
             }
 
-            if (g.mode === 'single'){
-                if (finishedThisLap){
+            if(g.mode==='single'){
+                if(finishedThisLap){
                     setTimeout(endGame,2000);
                 }else{
-                    g.lt = Date.now();
-                    g.secStartTime = Date.now();
-                    g.currentSplitIdx = 0;
-                    g.curSecTimes = [0,0,0];
+                    g.lt=Date.now();
+                    g.secStartTime=Date.now();
+                    g.currentSplitIdx=0;
+                    g.curSecTimes=[0,0,0];
                 }
             }else{ // multi
-                if (finishedThisLap){
-                    var me = mpState.players[mpState.myId] || (mpState.players[mpState.myId]={name:playerName});
-                    me.finished   = true;
-                    me.finishTime = Date.now() - g.st;
+                if(finishedThisLap){
+                    // 标记自己完赛 + 完赛时间
+                    if(!mpState.players[mpState.myId]){
+                        mpState.players[mpState.myId]={name:playerName,car:null,progress:g.progress,lap:g.lap};
+                    }
+                    mpState.players[mpState.myId].finished=true;
+                    mpState.players[mpState.myId].finishTime=Date.now()-g.st;
 
-                    var fb = document.getElementById('finish-banner');
-                    if (fb) fb.style.display = 'block';
+                    // 直接弹出最终排行榜（不再等待服务器、不再等待别人）
+                    showFinalRanking();
 
-                    socket.emit('race:finish', {
-                        roomId: mpState.roomId,
-                        totalTime: me.finishTime,
-                        laps: g.raceLaps
+                    // 通知服务器（如果服务端用得到）
+                    socket.emit('race:finish',{
+                        roomId:mpState.roomId,
+                        totalTime:mpState.players[mpState.myId].finishTime,
+                        laps:g.raceLaps
                     });
+
+                    // 停止本地循环
+                    g.on=0;
                 }else{
-                    g.lt = Date.now();
-                    g.secStartTime = Date.now();
-                    g.currentSplitIdx = 0;
-                    g.curSecTimes = [0,0,0];
+                    g.lt=Date.now();
+                    g.secStartTime=Date.now();
+                    g.currentSplitIdx=0;
+                    g.curSecTimes=[0,0,0];
                 }
             }
         }
     }
 
-    cam.x += (car.x-cam.x)*0.1*dt;
-    cam.y += (car.y-cam.y)*0.1*dt;
+    cam.x+=(car.x-cam.x)*0.1*dt;
+    cam.y+=(car.y-cam.y)*0.1*dt;
 
-    var timeEl  = document.getElementById('time');
-    var speedEl = document.getElementById('speed');
-    if (timeEl)  timeEl.textContent  = fmt(Date.now()-g.st);
-    if (speedEl) speedEl.textContent = Math.round(Math.hypot(car.vx,car.vy)*25);
+    var timeEl=document.getElementById('time');
+    var speedEl=document.getElementById('speed');
+    if(timeEl)timeEl.textContent=fmt(Date.now()-g.st);
+    if(speedEl)speedEl.textContent=Math.round(Math.hypot(car.vx,car.vy)*25);
 
-    if (mpState.inRoom && g.on){
-        var nowMs = Date.now();
-        if (nowMs - mpState.lastPosSend > 100){
-            mpState.lastPosSend = nowMs;
-            socket.emit('race:pos', {
-                roomId: mpState.roomId,
-                x: car.x,
-                y: car.y,
-                a: car.a,
-                progress: g.progress,
-                lap: g.lap
+    if(mpState.inRoom && g.on){
+        var nowMs=Date.now();
+        if(nowMs-mpState.lastPosSend>100){
+            mpState.lastPosSend=nowMs;
+            socket.emit('race:pos',{
+                roomId:mpState.roomId,
+                x:car.x,y:car.y,a:car.a,
+                progress:g.progress,
+                lap:g.lap
             });
         }
     }
@@ -821,7 +720,7 @@ function draw(){
 
     c.save();
     c.translate(500,350);
-    if (cfg.camMode===1){
+    if(cfg.camMode===1){
         c.rotate(-car.a-Math.PI/2);
         c.scale(cam.zoom,cam.zoom);
         c.translate(-car.x,-car.y);
@@ -831,107 +730,71 @@ function draw(){
     }
 
     c.strokeStyle='#fff';
-    c.lineWidth = (tw+15)*2;
-    c.lineCap='round';
-    c.lineJoin='round';
+    c.lineWidth=(tw+15)*2;
+    c.lineCap='round';c.lineJoin='round';
     c.beginPath();
-    track.forEach(function(p,i){
-        if (i===0) c.moveTo(p.x,p.y);
-        else       c.lineTo(p.x,p.y);
-    });
-    c.closePath();
-    c.stroke();
+    track.forEach(function(p,i){if(i===0)c.moveTo(p.x,p.y);else c.lineTo(p.x,p.y);});
+    c.closePath();c.stroke();
 
-    c.strokeStyle='#222';
-    c.lineWidth=tw*2;
-    c.stroke();
-
-    c.strokeStyle='#444';
-    c.lineWidth=4;
-    c.setLineDash([80,80]);
-    c.stroke();
-    c.setLineDash([]);
+    c.strokeStyle='#222';c.lineWidth=tw*2;c.stroke();
+    c.strokeStyle='#444';c.lineWidth=4;c.setLineDash([80,80]);c.stroke();c.setLineDash([]);
 
     g.splitIndices.forEach(function(idx){
-        var sp = track[idx], pr = track[idx-1];
-        c.save();
-        c.translate(sp.x,sp.y);
-        c.rotate(Math.atan2(sp.y-pr.y, sp.x-pr.x));
+        var sp=track[idx],pr=track[idx-1];
+        c.save();c.translate(sp.x,sp.y);
+        c.rotate(Math.atan2(sp.y-pr.y,sp.x-pr.x));
         c.fillStyle='rgba(255,255,0,0.5)';
         c.fillRect(-5,-tw,10,tw*2);
         c.restore();
     });
 
-    var s0=track[0], s1=track[1];
+    var s0=track[0],s1=track[1];
     c.save();
     c.translate(s0.x,s0.y);
     c.rotate(Math.atan2(s1.y-s0.y,s1.x-s0.x));
-    c.fillStyle='#fff';
-    c.fillRect(0,-tw,200,tw*2);
+    c.fillStyle='#fff';c.fillRect(0,-tw,200,tw*2);
     c.fillStyle='#000';
-    for (var r=0;r<12;r++)
-        for (var cl=0;cl<5;cl++)
-            if ((r+cl)%2===0)
-                c.fillRect(cl*40, -tw+r*44, 40, 44);
+    for(var r=0;r<12;r++)
+        for(var cl=0;cl<5;cl++)
+            if((r+cl)%2===0)c.fillRect(cl*40,-tw+r*44,40,44);
     c.restore();
 
     // 自己的车
     c.save();
-    c.translate(car.x,car.y);
-    c.rotate(car.a);
-    c.shadowColor='#00f0ff';
-    c.shadowBlur=20;
+    c.translate(car.x,car.y);c.rotate(car.a);
+    c.shadowColor='#00f0ff';c.shadowBlur=20;
     c.fillStyle='#00f0ff';
-    c.beginPath();
-    c.moveTo(50,0);
-    c.lineTo(-30,25);
-    c.lineTo(-30,-25);
-    c.fill();
-    c.fillStyle='#000';
-    c.fillRect(-20,-10,20,20);
+    c.beginPath();c.moveTo(50,0);c.lineTo(-30,25);c.lineTo(-30,-25);c.fill();
+    c.fillStyle='#000';c.fillRect(-20,-10,20,20);
     c.restore();
 
     // 其他玩家
-    if (mpState.inRoom){
+    if(mpState.inRoom){
         Object.keys(mpState.players).forEach(function(id){
-            var p = mpState.players[id];
-            if (!p || !p.car) return;
+            var p=mpState.players[id];
+            if(!p||!p.car)return;
 
             c.save();
             c.translate(p.car.x,p.car.y);
             c.rotate(p.car.a);
             c.globalAlpha=0.7;
             c.fillStyle='#ff00ff';
-            c.beginPath();
-            c.moveTo(50,0);
-            c.lineTo(-30,25);
-            c.lineTo(-30,-25);
-            c.fill();
-            c.fillStyle='#000';
-            c.fillRect(-20,-10,20,20);
+            c.beginPath();c.moveTo(50,0);c.lineTo(-30,25);c.lineTo(-30,-25);c.fill();
+            c.fillStyle='#000';c.fillRect(-20,-10,20,20);
             c.restore();
 
-            var isMe = (id === mpState.myId);
-            var nameColor = isMe ? '#00f0ff' : '#ffffff';
-            var strokeColor = 'rgba(0,0,0,0.75)';
-            var fontSize = 22;
-
+            var isMe=(id===mpState.myId);
+            var nameColor=isMe?'#00f0ff':'#ffffff';
             c.save();
-            c.font = fontSize + 'px "Segoe UI",system-ui,sans-serif';
-            c.textAlign = 'center';
-            c.textBaseline = 'bottom';
-            c.lineWidth = 4;
-            c.strokeStyle = strokeColor;
-            c.fillStyle = nameColor;
-
-            var nameText = (p.name || 'PLAYER');
-            if (isMe) nameText += ' (YOU)';
-
-            var tx = p.car.x;
-            var ty = p.car.y - 55;
-
-            c.strokeText(nameText, tx, ty);
-            c.fillText(nameText, tx, ty);
+            c.font='22px "Segoe UI",system-ui,sans-serif';
+            c.textAlign='center';c.textBaseline='bottom';
+            c.lineWidth=4;c.strokeStyle='rgba(0,0,0,0.75)';
+            c.fillStyle=nameColor;
+            var nameText=p.name||'PLAYER';
+            if(isMe)nameText+=' (YOU)';
+            var tx=p.car.x,ty=p.car.y-55;
+            c.strokeText(nameText,tx,ty);
+            c.fillText(nameText,tx,ty);
             c.restore();
         });
     }
@@ -943,462 +806,354 @@ function draw(){
 function drawMiniMap(){
     mc.fillStyle='rgba(0,0,0,0.8)';
     mc.fillRect(0,0,200,200);
-    if (!track.length) return;
+    if(!track.length)return;
     var mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
-    track.forEach(function(p){
-        mnx=Math.min(mnx,p.x); mxx=Math.max(mxx,p.x);
-        mny=Math.min(mny,p.y); mxy=Math.max(mxy,p.y);
-    });
-    var sc = 160/Math.max(mxx-mnx, mxy-mny);
-    mc.strokeStyle='#555';
-    mc.lineWidth=4;
+    track.forEach(function(p){mnx=Math.min(mnx,p.x);mxx=Math.max(mxx,p.x);mny=Math.min(mny,p.y);mxy=Math.max(mxy,p.y);});
+    var sc=160/Math.max(mxx-mnx,mxy-mny);
+    mc.strokeStyle='#555';mc.lineWidth=4;
     mc.beginPath();
     track.forEach(function(p,i){
-        var x=(p.x-mnx)*sc+20,
-            y=(p.y-mny)*sc+20;
-        if (i===0) mc.moveTo(x,y);
-        else       mc.lineTo(x,y);
+        var x=(p.x-mnx)*sc+20,y=(p.y-mny)*sc+20;
+        if(i===0)mc.moveTo(x,y);else mc.lineTo(x,y);
     });
     mc.stroke();
-
-    var cx=(car.x-mnx)*sc+20,
-        cy=(car.y-mny)*sc+20;
+    var cx=(car.x-mnx)*sc+20,cy=(car.y-mny)*sc+20;
     mc.fillStyle='#00f0ff';
-    mc.beginPath();
-    mc.arc(cx,cy,4,0,Math.PI*2);
-    mc.fill();
+    mc.beginPath();mc.arc(cx,cy,4,0,Math.PI*2);mc.fill();
 }
 
 // ===== 单人入口 =====
 function startGame(){
-    if (!playerName){
-        playerName = prompt("请输入你的昵称 (用于排行榜):","Guest") || "Guest";
-        localStorage.setItem('hmcl_playerName', playerName);
+    if(!playerName){
+        playerName=prompt("请输入你的昵称 (用于排行榜):","Guest")||"Guest";
+        localStorage.setItem('hmcl_playerName',playerName);
     }
-    socket.emit('login',{ username: playerName });
-    if (isMobile()){
-        try { document.documentElement.requestFullscreen(); } catch(e){}
-    }
+    socket.emit('login',{username:playerName});
+    if(isMobile()){try{document.documentElement.requestFullscreen();}catch(e){}}
     show('play');
     prepareRace();
-    g.mode     = 'single';
-    g.raceLaps = cfg.laps;
-    countdown(function(){
-        startRace('single', cfg.laps);
-    });
+    g.mode='single';g.raceLaps=cfg.laps;
+    countdown(function(){startRace('single',cfg.laps);});
 }
 
 // ===== 多人房间 =====
 function showMultiplayer(){
-    var st = document.getElementById('mp-status');
-    var pl = document.getElementById('mp-player-list');
-    var oc = document.getElementById('mp-owner-controls');
-    if (st) st.textContent='';
-    if (pl) pl.innerHTML='';
-    if (oc) oc.style.display='none';
+    var st=document.getElementById('mp-status');
+    var pl=document.getElementById('mp-player-list');
+    var oc=document.getElementById('mp-owner-controls');
+    if(st)st.textContent='';
+    if(pl)pl.innerHTML='';
+    if(oc)oc.style.display='none';
     show('multiplayer');
 }
 function createRoom(){
-    var roomName = (document.getElementById('mp-room-name').value || '').trim() ||
-                   ('room-'+Math.floor(Math.random()*10000));
-    var maxPlayers = parseInt(document.getElementById('mp-max-players').value,10) || 4;
-    var laps       = parseInt(document.getElementById('mp-laps').value,10) || 3;
-    var password   = document.getElementById('mp-password').value || '';
-    maxPlayers = Math.max(2,Math.min(8,maxPlayers));
-
-    mpState.roomId    = roomName;
-    mpState.maxPlayers= maxPlayers;
-    mpState.laps      = laps;
-    mpState.password  = password;
-    mpState.isOwner   = true;
-
-    socket.emit('room:create',{
-        roomId:roomName,
-        maxPlayers:maxPlayers,
-        laps:laps,
-        password:password,
-        name:playerName
-    });
-
-    var st = document.getElementById('mp-status');
-    if (st) st.textContent='正在创建房间...';
+    var roomName=(document.getElementById('mp-room-name').value||'').trim()||
+                 ('room-'+Math.floor(Math.random()*10000));
+    var maxPlayers=parseInt(document.getElementById('mp-max-players').value,10)||4;
+    var laps=parseInt(document.getElementById('mp-laps').value,10)||3;
+    var password=document.getElementById('mp-password').value||'';
+    maxPlayers=Math.max(2,Math.min(8,maxPlayers));
+    mpState.roomId=roomName;
+    mpState.maxPlayers=maxPlayers;
+    mpState.laps=laps;
+    mpState.password=password;
+    mpState.isOwner=true;
+    socket.emit('room:create',{roomId:roomName,maxPlayers:maxPlayers,laps:laps,password:password,name:playerName});
+    var st=document.getElementById('mp-status');if(st)st.textContent='正在创建房间...';
 }
 function joinRoom(){
-    var roomName = (document.getElementById('mp-room-name').value || '').trim();
-    if (!roomName){ alert('请输入房间名'); return; }
-    var password = document.getElementById('mp-password').value || '';
-    mpState.roomId  = roomName;
-    mpState.isOwner = false;
-    socket.emit('room:join',{
-        roomId:roomName,
-        password:password,
-        name:playerName
-    });
-    var st = document.getElementById('mp-status');
-    if (st) st.textContent='正在加入房间...';
+    var roomName=(document.getElementById('mp-room-name').value||'').trim();
+    if(!roomName){alert('请输入房间名');return;}
+    var password=document.getElementById('mp-password').value||'';
+    mpState.roomId=roomName;
+    mpState.isOwner=false;
+    socket.emit('room:join',{roomId:roomName,password:password,name:playerName});
+    var st=document.getElementById('mp-status');if(st)st.textContent='正在加入房间...';
 }
 
-socket.on('room:update', function(info){
-    mpState.inRoom    = true;
-    mpState.roomId    = info.roomId;
-    mpState.maxPlayers= info.maxPlayers;
-    mpState.laps      = info.laps;
-    mpState.players   = {};
-    mpState.raceActive = false;
+socket.on('room:update',function(info){
+    mpState.inRoom=true;
+    mpState.roomId=info.roomId;
+    mpState.maxPlayers=info.maxPlayers;
+    mpState.laps=info.laps;
+    mpState.players={};
+    mpState.raceActive=false;
 
     info.players.forEach(function(p){
-        mpState.players[p.id] = {
-            name:p.name,
-            car:null,
-            progress:0,
-            lap:0,
-            finished:false,
-            finishTime:Infinity
-        };
+        mpState.players[p.id]={name:p.name,car:null,progress:0,lap:0,finished:false,finishTime:Infinity};
     });
 
-    var listHtml = '房间ID: '+info.roomId+
+    var listHtml='房间ID: '+info.roomId+
         '<br>圈数: '+info.laps+
         '<br>人数: '+info.players.length+' / '+info.maxPlayers+
         '<br><br>玩家列表:<br>';
     info.players.forEach(function(p){
-        var mark = (p.id===info.ownerId)?' (房主)':'';
-        listHtml += '- '+p.name+mark+'<br>';
+        var mark=(p.id===info.ownerId)?' (房主)':'';
+        listHtml+='- '+p.name+mark+'<br>';
     });
-    var pl = document.getElementById('mp-player-list');
-    if (pl) pl.innerHTML = listHtml;
+    var pl=document.getElementById('mp-player-list');
+    if(pl)pl.innerHTML=listHtml;
+    var st=document.getElementById('mp-status');
+    if(st)st.textContent='已进入房间';
 
-    var st = document.getElementById('mp-status');
-    if (st) st.textContent='已进入房间';
-
-    mpState.isOwner = (info.ownerId === mpState.myId);
-    var oc = document.getElementById('mp-owner-controls');
-    if (oc) oc.style.display = mpState.isOwner ? 'block' : 'none';
+    mpState.isOwner=(info.ownerId===mpState.myId);
+    var oc=document.getElementById('mp-owner-controls');
+    if(oc)oc.style.display=mpState.isOwner?'block':'none';
 });
-socket.on('room:error', function(msg){
+socket.on('room:error',function(msg){
     mpState.inRoom=false;
-    var st = document.getElementById('mp-status');
-    if (st) st.textContent='错误：'+msg;
+    var st=document.getElementById('mp-status');
+    if(st)st.textContent='错误：'+msg;
 });
-socket.on('room:left', function(){
-    mpState.inRoom=false;
-    mpState.roomId=null;
-    mpState.players={};
-    mpState.raceActive=false;
-    var st = document.getElementById('mp-status');
-    var pl = document.getElementById('mp-player-list');
-    var oc = document.getElementById('mp-owner-controls');
-    if (st) st.textContent='已离开房间';
-    if (pl) pl.innerHTML='';
-    if (oc) oc.style.display='none';
+socket.on('room:left',function(){
+    mpState.inRoom=false;mpState.roomId=null;mpState.players={};mpState.raceActive=false;
+    var st=document.getElementById('mp-status');
+    var pl=document.getElementById('mp-player-list');
+    var oc=document.getElementById('mp-owner-controls');
+    if(st)st.textContent='已离开房间';
+    if(pl)pl.innerHTML='';
+    if(oc)oc.style.display='none';
 });
 
 function startMultiplayerRace(){
-    if (!mpState.inRoom || !mpState.isOwner) return;
-    socket.emit('race:start',{ roomId:mpState.roomId, laps:mpState.laps });
+    if(!mpState.inRoom||!mpState.isOwner)return;
+    socket.emit('race:start',{roomId:mpState.roomId,laps:mpState.laps});
 }
 
-socket.on('race:start', function(data){
-    console.log('多人比赛开始准备!',data);
-
-    mpState.raceActive = true;
-    g.mode     = 'multi';
-    g.raceLaps = data.laps || mpState.laps || cfg.laps;
+socket.on('race:start',function(data){
+    mpState.raceActive=true;
+    g.mode='multi';
+    g.raceLaps=data.laps||mpState.laps||cfg.laps;
 
     Object.keys(mpState.players).forEach(function(id){
-        mpState.players[id].finished   = false;
-        mpState.players[id].finishTime = Infinity;
-        mpState.players[id].lap        = 0;
-        mpState.players[id].progress   = 0;
+        mpState.players[id].finished=false;
+        mpState.players[id].finishTime=Infinity;
+        mpState.players[id].lap=0;
+        mpState.players[id].progress=0;
     });
 
-    var fb = document.getElementById('finish-banner');
-    if (fb) fb.style.display = 'none';
-
-    if (isMobile()){
-        try{ document.documentElement.requestFullscreen(); }catch(e){}
-    }
-    show('play');
-
-    track = makeTrack();
-    var stIdx=5,
-        st   = track[stIdx],
-        nx   = track[stIdx+5];
-    var baseAngle = Math.atan2(nx.y-st.y, nx.x-st.x);
-
+    // 初始化起跑位
+    track=makeTrack();
+    var stIdx=5,st=track[stIdx],nx=track[stIdx+5];
+    var baseAngle=Math.atan2(nx.y-st.y,nx.x-st.x);
     function slotToOffset(slot){
-        var row = Math.floor(slot/4);
-        var col = slot%4;
-        var sideways = (col-1.5)*60;
-        var forward  = -row*80;
-        return { sideways:sideways, forward:forward };
+        var row=Math.floor(slot/4);
+        var col=slot%4;
+        var sideways=(col-1.5)*60;
+        var forward=-row*80;
+        return{sideways:sideways,forward:forward};
     }
-
     var mySlot=0;
     data.players.forEach(function(p){
-        if (p.id===mpState.myId) mySlot=p.slot;
-        mpState.players[p.id] = mpState.players[p.id] || {
-            name:p.name, car:null, progress:0, lap:0,
-            finished:false, finishTime:Infinity
-        };
+        if(p.id===mpState.myId)mySlot=p.slot;
+        mpState.players[p.id]=mpState.players[p.id]||{name:p.name,car:null,progress:0,lap:0,finished:false,finishTime:Infinity};
     });
-
-    var o = slotToOffset(mySlot);
-    car = {
-        x: st.x + Math.cos(baseAngle+Math.PI/2)*o.sideways +
-                 Math.cos(baseAngle)*o.forward,
-        y: st.y + Math.sin(baseAngle+Math.PI/2)*o.sideways +
-                 Math.sin(baseAngle)*o.forward,
-        a: baseAngle,
-        s:0, vx:0, vy:0
+    var o=slotToOffset(mySlot);
+    car={
+        x:st.x+Math.cos(baseAngle+Math.PI/2)*o.sideways+Math.cos(baseAngle)*o.forward,
+        y:st.y+Math.sin(baseAngle+Math.PI/2)*o.sideways+Math.sin(baseAngle)*o.forward,
+        a:baseAngle,s:0,vx:0,vy:0
     };
-    cam = { x:car.x, y:car.y, zoom:0.4 };
+    cam={x:car.x,y:car.y,zoom:0.4};
 
     data.players.forEach(function(p){
-        if (p.id===mpState.myId) return;
-        var so = slotToOffset(p.slot);
-        mpState.players[p.id].car = {
-            x: st.x + Math.cos(baseAngle+Math.PI/2)*so.sideways +
-                     Math.cos(baseAngle)*so.forward,
-            y: st.y + Math.sin(baseAngle+Math.PI/2)*so.sideways +
-                     Math.sin(baseAngle)*so.forward,
-            a: baseAngle
+        if(p.id===mpState.myId)return;
+        var so=slotToOffset(p.slot);
+        mpState.players[p.id].car={
+            x:st.x+Math.cos(baseAngle+Math.PI/2)*so.sideways+Math.cos(baseAngle)*so.forward,
+            y:st.y+Math.sin(baseAngle+Math.PI/2)*so.sideways+Math.sin(baseAngle)*so.forward,
+            a:baseAngle
         };
-        mpState.players[p.id].progress = 0;
-        mpState.players[p.id].lap      = 0;
-        mpState.players[p.id].finished = false;
-        mpState.players[p.id].finishTime = Infinity;
+        mpState.players[p.id].progress=0;
+        mpState.players[p.id].lap=0;
+        mpState.players[p.id].finished=false;
+        mpState.players[p.id].finishTime=Infinity;
     });
 
-    g.on=0;
-    g.lap=0;
-    g.progress=0; g.lastProgress=0;
-    g.curSecTimes=[0,0,0];
-    g.currentSplitIdx=0;
-    g.uiTimeouts.forEach(clearTimeout); g.uiTimeouts=[];
+    g.on=0;g.lap=0;g.progress=0;g.lastProgress=0;
+    g.curSecTimes=[0,0,0];g.currentSplitIdx=0;
+    g.uiTimeouts.forEach(clearTimeout);g.uiTimeouts=[];
     resetSectorUI();
-    var lapEl = document.getElementById('lap');
-    var lapMsg = document.getElementById('lapMsg');
-    if (lapEl)  lapEl.textContent='0';
-    if (lapMsg) lapMsg.style.display='none';
+    var lapEl=document.getElementById('lap');
+    var lapMsg=document.getElementById('lapMsg');
+    if(lapEl)lapEl.textContent='0';
+    if(lapMsg)lapMsg.style.display='none';
 
-    countdown(function(){
-        startRace('multi', g.raceLaps);
-    });
+    show('play');
+    countdown(function(){startRace('multi',g.raceLaps);});
 });
 
-socket.on('race:pos', function(data){
-    if (!mpState.inRoom) return;
-    if (data.id===mpState.myId) return;
-    var p = mpState.players[data.id];
-    if (!p) return;
-    if (!p.car) p.car = { x:data.x,y:data.y,a:data.a };
-    p.car.x = data.x;
-    p.car.y = data.y;
-    p.car.a = data.a;
-    p.progress = data.progress;
-    p.lap      = data.lap;
+socket.on('race:pos',function(data){
+    if(!mpState.inRoom)return;
+    if(data.id===mpState.myId)return;
+    var p=mpState.players[data.id];
+    if(!p)return;
+    if(!p.car)p.car={x:data.x,y:data.y,a:data.a};
+    p.car.x=data.x;p.car.y=data.y;p.car.a=data.a;
+    p.progress=data.progress;p.lap=data.lap;
 });
 
-socket.on('race:end', function(result){
-    mpState.raceActive = false;
-    g.on = 0;
-    showRaceResult(result);
-});
-// 某个玩家完赛（服务器广播）
-socket.on('race:finish', function (data) {
-    if (!mpState.inRoom) return;
-    var p = mpState.players[data.id];
-    if (!p) {
-        mpState.players[data.id] = {
-            name: data.name || ('P'+data.id.slice(0,4)),
-            car: null,
-            progress: data.progress || 0,
-            lap: data.lap || g.raceLaps,
-            finished: true,
-            finishTime: data.totalTime || Infinity
+// 若服务器自己发 race:finish，就同步一下状态，但仍然以本地 showFinalRanking 为准
+socket.on('race:finish',function(data){
+    var p=mpState.players[data.id];
+    if(!p){
+        mpState.players[data.id]={
+            name:data.name||('P'+data.id.slice(0,4)),
+            car:null,progress:data.progress||1,lap:data.lap||g.raceLaps,
+            finished:true,finishTime:data.totalTime||Infinity
         };
-    } else {
-        p.finished   = true;
-        p.finishTime = data.totalTime || p.finishTime || Infinity;
-        p.lap        = data.lap || p.lap || g.raceLaps;
-        p.progress   = data.progress || p.progress || 1;
+    }else{
+        p.finished=true;
+        p.finishTime=data.totalTime||p.finishTime||Infinity;
+        p.lap=data.lap||p.lap||g.raceLaps;
+        p.progress=data.progress||p.progress||1;
     }
-
-    // 如果你自己这边还没 finished（比如刚好同时冲线），也顺手标一下
-    if (data.id === mpState.myId) {
-        var me = mpState.players[mpState.myId];
-        if (me) {
-            me.finished   = true;
-            me.finishTime = data.totalTime || (Date.now() - g.st);
-        }
-        var fb = document.getElementById('finish-banner');
-        if (fb) fb.style.display = 'block';
-    }
-
-    // 每来一个完赛事件都尝试检查一次是否全部完成
-    checkLocalRaceEnd();
 });
-// 本地兜底：所有人 finished 就结算
-// 本地兜底：所有人 finished 就结算
-function checkLocalRaceEnd() {
-    if (!mpState.inRoom || !mpState.raceActive) return;
 
-    var ids = Object.keys(mpState.players);
-    if (!ids.length) return;
-
-    var allFinished = true;
-    var result = [];
-
-    ids.forEach(function (id) {
-        var p = mpState.players[id];
-        // 只要还有人没到指定圈数，就认为没完
-        if (!p.finished && (p.lap || 0) < g.raceLaps) {
-            allFinished = false;
-        }
-        result.push({
-            id: id,
-            name: p.name,
-            totalTime: p.finishTime || Infinity
+// ===== 最终排行榜（本地直接弹） =====
+function showFinalRanking(){
+    // 组装列表：自己 + 其他玩家
+    var list=[];
+    // 自己
+    list.push({
+        id:mpState.myId,
+        name:playerName||'你',
+        lap:g.lap,
+        progress:g.progress,
+        finished:true,
+        finishTime:mpState.players[mpState.myId]?mpState.players[mpState.myId].finishTime:(Date.now()-g.st)
+    });
+    // 其他玩家
+    Object.keys(mpState.players).forEach(function(id){
+        if(id===mpState.myId)return;
+        var p=mpState.players[id];
+        if(!p)return;
+        list.push({
+            id:id,
+            name:p.name||'P',
+            lap:p.lap||0,
+            progress:p.progress||0,
+            finished:p.finished||false,
+            finishTime:p.finishTime||Infinity
         });
     });
 
-    if (!allFinished) return;
-
-    // 排个名
-    result.sort(function (a, b) {
-        return a.totalTime - b.totalTime;
+    // 排名规则：完成的在前，按完赛时间；没完成的按圈数与进度
+    list.sort(function(a,b){
+        var aDone=(a.lap>=g.raceLaps);
+        var bDone=(b.lap>=g.raceLaps);
+        if(aDone&&bDone) return a.finishTime-b.finishTime;
+        if(aDone!==bDone) return aDone?-1:1;
+        if(a.lap!==b.lap) return b.lap-a.lap;
+        return b.progress-a.progress;
     });
 
-    mpState.raceActive = false;
-    g.on = 0;
-    showRaceResult(result);
-}
-
-function showRaceResult(result){
-    if (!result || !result.length) return;
-
-    var html = '';
-    result.forEach(function(p,idx){
-        var rank = idx+1;
-        var color = rank===1 ? '#ffd700' : (rank===2 ? '#c0c0c0' : (rank===3 ? '#cd7f32' : '#fff'));
-        var meMark = (p.id === mpState.myId) ? '<span style="color:#00f0ff;"> (YOU)</span>' : '';
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;' +
-                'padding:6px 4px;margin-bottom:4px;border-radius:4px;' +
-                'background:rgba(255,255,255,0.05);color:'+color+';">' +
-                '<div style="min-width:26px;font-weight:bold;">#'+rank+'</div>' +
-                '<div style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">'+
-                    p.name + meMark +
-                '</div>' +
-                '<div style="min-width:90px;text-align:right;font-size:13px;color:#eee;">'+fmt(p.totalTime)+'</div>' +
-                '</div>';
+    var html='';
+    list.forEach(function(p,idx){
+        var rank=idx+1;
+        var color=rank===1?'#ffd700':(rank===2?'#c0c0c0':(rank===3?'#cd7f32':'#fff'));
+        var meMark=(p.id===mpState.myId)?'<span style="color:#00f0ff;"> (YOU)</span>':'';
+        var timeStr=(p.lap>=g.raceLaps && p.finishTime<Infinity)?fmt(p.finishTime):'--:--.---';
+        html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 4px;margin-bottom:4px;border-radius:4px;background:rgba(255,255,255,0.05);color:'+color+';">'+
+              '<div style="min-width:28px;font-weight:bold;">#'+rank+'</div>'+
+              '<div style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">'+p.name+meMark+'</div>'+
+              '<div style="min-width:90px;text-align:right;font-size:13px;color:#eee;">'+timeStr+'</div>'+
+              '</div>';
     });
 
-    var cont = document.getElementById('race-result-content');
-    if (cont) cont.innerHTML = html;
+    var cont=document.getElementById('final-rank-content');
+    if(cont)cont.innerHTML=html;
 
-    // 把“您已完赛”提示关掉
-    var fb = document.getElementById('finish-banner');
-    if (fb) fb.style.display = 'none';
+    // 关闭小 HUD 排行
+    var box=document.getElementById('mp-rank');
+    if(box)box.innerHTML='';
 
-    show('race-result-layer');
+    show('final-rank-layer');
 }
-// ===== 排行榜 + 多人隐藏 PB HUD =====
+
+// ===== 小 HUD 排名（比赛中右边那块） =====
 function updateLocalRanking(){
-    var box = document.getElementById('mp-rank');
+    var box=document.getElementById('mp-rank');
 
-    var bestEl = document.getElementById('best');
-    var s1Box  = document.getElementById('s1-box');
-    var s2Box  = document.getElementById('s2-box');
-    var s3Box  = document.getElementById('s3-box');
-    if (g.mode === 'multi'){
-        if (bestEl) bestEl.style.display = 'none';
-        if (s1Box)  s1Box.style.display  = 'none';
-        if (s2Box)  s2Box.style.display  = 'none';
-        if (s3Box)  s3Box.style.display  = 'none';
-    } else {
-        if (bestEl) bestEl.style.display = '';
-        if (s1Box)  s1Box.style.display  = '';
-        if (s2Box)  s2Box.style.display  = '';
-        if (s3Box)  s3Box.style.display  = '';
+    // 多人模式隐藏 PB HUD
+    var bestEl=document.getElementById('best');
+    var s1Box=document.getElementById('s1-box');
+    var s2Box=document.getElementById('s2-box');
+    var s3Box=document.getElementById('s3-box');
+    if(g.mode==='multi'){
+        if(bestEl)bestEl.style.display='none';
+        if(s1Box)s1Box.style.display='none';
+        if(s2Box)s2Box.style.display='none';
+        if(s3Box)s3Box.style.display='none';
+    }else{
+        if(bestEl)bestEl.style.display='';
+        if(s1Box)s1Box.style.display='';
+        if(s2Box)s2Box.style.display='';
+        if(s3Box)s3Box.style.display='';
     }
 
-    if (!box) return;
-    if (!mpState.inRoom || !mpState.raceActive) {
-        box.innerHTML = '';
+    if(!box)return;
+    if(!mpState.inRoom || !mpState.raceActive || !g.on){
+        box.innerHTML='';
         return;
     }
 
-    var list = [];
-
-    list.push({    
-        id: mpState.myId,
-        name: playerName || '你',
-        lap: g.lap,
-        progress: g.progress,
-        finished: mpState.players[mpState.myId] && mpState.players[mpState.myId].finished,
-        finishTime: mpState.players[mpState.myId] ? mpState.players[mpState.myId].finishTime : Infinity
+    var list=[];
+    // 自己
+    list.push({
+        id:mpState.myId,
+        name:playerName||'你',
+        lap:g.lap,
+        progress:g.progress,
+        finished:mpState.players[mpState.myId]&&mpState.players[mpState.myId].finished,
+        finishTime:mpState.players[mpState.myId]?mpState.players[mpState.myId].finishTime:Infinity
     });
-
+    // 其他人
     Object.keys(mpState.players).forEach(function(id){
-        if (id===mpState.myId) return;
-        var p = mpState.players[id];
-        if (!p) return;
+        if(id===mpState.myId)return;
+        var p=mpState.players[id];
+        if(!p)return;
         list.push({
             id:id,
-            name:p.name || 'P',
-            lap:p.lap || 0,
-            progress:p.progress || 0,
-            finished:p.finished || false,
-            finishTime:p.finishTime || Infinity
+            name:p.name||'P',
+            lap:p.lap||0,
+            progress:p.progress||0,
+            finished:p.finished||false,
+            finishTime:p.finishTime||Infinity
         });
     });
 
     list.sort(function(a,b){
-        if (a.finished && b.finished){
-            return a.finishTime - b.finishTime;
-        }
-        if (a.finished !== b.finished){
-            return a.finished ? -1 : 1;
-        }
-        if (a.lap !== b.lap) return b.lap - a.lap;
-        return b.progress - a.progress;
+        var aDone=(a.lap>=g.raceLaps);
+        var bDone=(b.lap>=g.raceLaps);
+        if(aDone&&bDone) return a.finishTime-b.finishTime;
+        if(aDone!==bDone) return aDone?-1:1;
+        if(a.lap!==b.lap) return b.lap-a.lap;
+        return b.progress-a.progress;
     });
 
-    var html = '';
-    html += '<div style="font-size:16px;font-weight:bold;margin-bottom:6px;letter-spacing:1px;">' +
-            'RACE STANDING' +
-            '</div>';
-
+    var html='<div style="font-size:16px;font-weight:bold;margin-bottom:6px;letter-spacing:1px;">RACE STANDING</div>';
     list.forEach(function(p,idx){
-        var isMe = (p.id===mpState.myId);
-        var bg   = isMe ? 'rgba(0,240,255,0.25)' : 'rgba(255,255,255,0.08)';
-        var color= isMe ? '#00f0ff' : '#fff';
-        var rank = idx+1;
-
-        var lapStr = p.lap + '/' + g.raceLaps;
-        var flag   = p.finished ? 'FINISH' : 'RUN';
-
-        html += '<div style="display:flex;align-items:center;justify-content:space-between;' +
-                'padding:4px 6px;margin-bottom:3px;border-radius:4px;' +
-                'background:'+bg+';color:'+color+';">' +
-                '<div style="min-width:32px;font-weight:bold;">#'+rank+'</div>' +
-                '<div style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">'+
-                    p.name +
-                    (isMe ? ' <span style="font-size:11px;color:#0ff;">(YOU)</span>' : '')+
-                '</div>' +
-                '<div style="min-width:60px;text-align:right;font-size:11px;color:#ccc;">'+lapStr+'</div>' +
-                '<div style="min-width:52px;text-align:right;font-size:11px;color:#ffa;">'+flag+'</div>' +
-                '</div>';
+        var isMe=(p.id===mpState.myId);
+        var bg=isMe?'rgba(0,240,255,0.25)':'rgba(255,255,255,0.08)';
+        var color=isMe?'#00f0ff':'#fff';
+        var rank=idx+1;
+        var lapStr=p.lap+'/'+g.raceLaps;
+        var flag=(p.lap>=g.raceLaps)?'FINISH':'RUN';
+        html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 6px;margin-bottom:3px;border-radius:4px;background:'+bg+';color:'+color+';">'+
+              '<div style="min-width:32px;font-weight:bold;">#'+rank+'</div>'+
+              '<div style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">'+p.name+
+              (isMe?' <span style="font-size:11px;color:#0ff;">(YOU)</span>':'')+
+              '</div>'+
+              '<div style="min-width:60px;text-align:right;font-size:11px;color:#ccc;">'+lapStr+'</div>'+
+              '<div style="min-width:52px;text-align:right;font-size:11px;color:#ffa;">'+flag+'</div>'+
+              '</div>';
     });
-
-    box.innerHTML = html;
-
-    checkLocalRaceEnd();
+    box.innerHTML=html;
 }
 
 // ===== 初始化 =====
-window.addEventListener('load', function(){
+window.addEventListener('load',function(){
     loadPB();
     loadLeaderboard();
 });
