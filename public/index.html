@@ -49,7 +49,7 @@
     </style>
 </head>
 <body>
-<!-- 登录层 -->
+<!-- 登录层：单独放在 game 外面，避免被 show() 误关 -->
 <div id="auth" class="scr on">
   <h1>ELECTRON<br>EXPRESSWAY</h1>
   <div class="sub">Login to save your PB</div>
@@ -132,7 +132,7 @@
             <div>BEST PB: <span id="best">--:--.---</span></div>
         </div>
 
-        <!-- 多人 HUD 排行：左下角 -->
+        <!-- 多人 HUD 排名：左下角 -->
         <div id="mp-rank"
              style="position:absolute;
                     bottom:40px;
@@ -178,7 +178,7 @@
             您已完赛<br>等待其他玩家冲线…
         </div>
 
-        <!-- 比赛结束自动返回提示 -->
+        <!-- 整场比赛结束提示 -->
         <div id="race-finished-banner"
              style="position:absolute;
                     top:40%;
@@ -217,7 +217,7 @@
         <button class="btn" onclick="show('menu')">← MENU</button>
     </div>
 
-    <!-- 世界排行榜（保持原样） -->
+    <!-- 世界排行榜 -->
     <div id="leaderboard-layer">
         <h1>WORLD RECORDS</h1>
         <table class="lb-table"><tbody id="lb-body"></tbody></table>
@@ -270,7 +270,7 @@ var mpState = {
     maxPlayers:4,
     laps:3,
     password:'',
-    players:{},
+    players:{},   // id -> {name, car, progress, lap, finished, finishTime}
     myId:null,
     raceActive:false,
     lastPosSend:0
@@ -314,18 +314,18 @@ window.addEventListener('resize',resize);resize();
 document.onkeydown=function(e){
     if(!e||!e.key)return;
     var k=e.key.toLowerCase();
-    if(k=='w'||k=='arrowup')keys.w=1;
-    if(k=='a'||k=='arrowleft')keys.a=1;
-    if(k=='s'||k=='arrowdown')keys.s=1;
-    if(k=='d'||k=='arrowright')keys.d=1;
+    if(k==='w'||k==='arrowup')keys.w=1;
+    if(k==='a'||k==='arrowleft')keys.a=1;
+    if(k==='s'||k==='arrowdown')keys.s=1;
+    if(k==='d'||k==='arrowright')keys.d=1;
 };
 document.onkeyup=function(e){
     if(!e||!e.key)return;
     var k=e.key.toLowerCase();
-    if(k=='w'||k=='arrowup')keys.w=0;
-    if(k=='a'||k=='arrowleft')keys.a=0;
-    if(k=='s'||k=='arrowdown')keys.s=0;
-    if(k=='d'||k=='arrowright')keys.d=0;
+    if(k==='w'||k==='arrowup')keys.w=0;
+    if(k==='a'||k==='arrowleft')keys.a=0;
+    if(k==='s'||k==='arrowdown')keys.s=0;
+    if(k==='d'||k==='arrowright')keys.d=0;
 };
 
 if(isMobile()){
@@ -574,8 +574,8 @@ function prepareRace(){
     if(lapEl)lapEl.textContent='0';
     if(lapMsg)lapMsg.style.display='none';
     var fb=document.getElementById('finish-banner');
-    if(fb)fb.style.display='none';
     var rb=document.getElementById('race-finished-banner');
+    if(fb)fb.style.display='none';
     if(rb)rb.style.display='none';
 }
 function startRace(mode,laps){
@@ -602,6 +602,7 @@ function loop(now){
 function update(dt){
     var ms=18,ac=0.25,br=0.4,tr=0.06,fr=0.01,dr=0.96;
 
+    // 自己车的物理更新
     if(keys.w)car.s=Math.min(car.s+ac*dt,ms);
     if(keys.s)car.s=Math.max(car.s-br*dt,-ms*0.3);
     if(!keys.w&&!keys.s){
@@ -621,6 +622,7 @@ function update(dt){
     car.x+=car.vx*dt;
     car.y+=car.vy*dt;
 
+    // 投影到赛道
     var md=1e9,ni=0,np=null;
     var startIdx=Math.floor(g.progress*track.length);
     for(var j=-250;j<250;j++){
@@ -638,6 +640,7 @@ function update(dt){
     var me=mpState.players[mpState.myId];
     var alreadyFinished=g.mode==='multi' && me && me.finished;
 
+    // 只有自己还没被标记 finished 时，才计圈
     if(!alreadyFinished){
         g.lastProgress=g.progress;
         g.progress=ni/track.length;
@@ -650,6 +653,7 @@ function update(dt){
                 recordSector(sIdx);
         }
 
+        // 跨越起终点
         if(g.lastProgress>0.9 && g.progress<0.1){
             var lapTime=Date.now()-g.lt;
             recordSector(2);
@@ -660,6 +664,7 @@ function update(dt){
 
             var finishedThisLap=(g.lap>=g.raceLaps);
 
+            // 单人 PB 更新
             if(lapTime<g.pb.lap){
                 g.pb={lap:lapTime,s1:g.curSecTimes[0],s2:g.curSecTimes[1],s3:g.curSecTimes[2]};
                 localStorage.setItem('hmcl_racing_pb',JSON.stringify(g.pb));
@@ -680,6 +685,7 @@ function update(dt){
                     g.curSecTimes=[0,0,0];
                 }
             }else{
+                // 多人模式：只对自己做完赛标记和提示，整场结束交给服务器/兜底逻辑
                 if(finishedThisLap){
                     if(!mpState.players[mpState.myId]){
                         mpState.players[mpState.myId]={name:playerName};
@@ -697,6 +703,7 @@ function update(dt){
                         totalTime:mpState.players[mpState.myId].finishTime,
                         laps:g.raceLaps
                     });
+                    // 不在这里结束整场比赛
                 }else{
                     g.lt=Date.now();
                     g.secStartTime=Date.now();
@@ -715,6 +722,7 @@ function update(dt){
     if(timeEl)timeEl.textContent=fmt(Date.now()-g.st);
     if(speedEl)speedEl.textContent=Math.round(Math.hypot(car.vx,car.vy)*25);
 
+    // 多人位置同步
     if(mpState.inRoom && g.on){
         var nowMs=Date.now();
         if(nowMs-mpState.lastPosSend>100){
@@ -729,7 +737,6 @@ function update(dt){
     }
 
     updateLocalRanking();
-    checkLocalRaceEnd();
 }
 
 function draw(){
@@ -747,6 +754,7 @@ function draw(){
         c.translate(-cam.x,-cam.y);
     }
 
+    // 赛道
     c.strokeStyle='#fff';
     c.lineWidth=(tw+15)*2;
     c.lineCap='round';c.lineJoin='round';
@@ -760,6 +768,7 @@ function draw(){
     c.strokeStyle='#222';c.lineWidth=tw*2;c.stroke();
     c.strokeStyle='#444';c.lineWidth=4;c.setLineDash([80,80]);c.stroke();c.setLineDash([]);
 
+    // 分段线
     g.splitIndices.forEach(function(idx){
         var sp=track[idx],pr=track[idx-1];
         c.save();
@@ -770,6 +779,7 @@ function draw(){
         c.restore();
     });
 
+    // 起终点
     var s0=track[0],s1=track[1];
     c.save();
     c.translate(s0.x,s0.y);
@@ -782,6 +792,7 @@ function draw(){
             if((r+cl)%2===0)c.fillRect(cl*40,-tw+r*44,40,44);
     c.restore();
 
+    // 自车
     c.save();
     c.translate(car.x,car.y);
     c.rotate(car.a);
@@ -791,6 +802,7 @@ function draw(){
     c.fillStyle='#000';c.fillRect(-20,-10,20,20);
     c.restore();
 
+    // 其他玩家
     if(mpState.inRoom){
         Object.keys(mpState.players).forEach(function(id){
             var p=mpState.players[id];
@@ -1004,8 +1016,8 @@ socket.on('race:start',function(data){
     if(lapEl)lapEl.textContent='0';
     if(lapMsg)lapMsg.style.display='none';
     var fb=document.getElementById('finish-banner');
-    if(fb)fb.style.display='none';
     var rb=document.getElementById('race-finished-banner');
+    if(fb)fb.style.display='none';
     if(rb)rb.style.display='none';
 
     show('play');
@@ -1022,6 +1034,7 @@ socket.on('race:pos',function(data){
     p.progress=data.progress;p.lap=data.lap;
 });
 
+// 记录别人完赛信息
 socket.on('race:finish',function(data){
     var p=mpState.players[data.id];
     if(!p){
@@ -1039,48 +1052,19 @@ socket.on('race:finish',function(data){
         p.lap=data.lap||p.lap||g.raceLaps;
         p.progress=data.progress||p.progress||1;
     }
-});
-socket.on('race:ended', function () {
-    // 不管本地怎么认为，统统认为比赛已经结束
-    mpState.raceActive = false;
-    g.on = 0;
 
-    var fb = document.getElementById('finish-banner');
-    if (fb) fb.style.display = 'none';
-
-    var rb = document.getElementById('race-finished-banner');
-    if (rb) {
-        rb.style.display = 'block';
-        rb.textContent = '比赛已结束，5秒钟后将返回房间…';
-    }
-
-    setTimeout(function () {
-        if (rb) rb.style.display = 'none';
-        show('multiplayer');
-        g.on = 0;
-        g.lap = 0;
-        g.progress = 0;
-        g.lastProgress = 0;
-    }, 5000);
+    // 纯前端兜底：如果本地判断所有人都 finished，则触发统一结束
+    tryClientEndRaceIfAllFinished();
 });
 
-// ===== 本地判断所有人完赛 → 提示并返回房间 =====
-function checkLocalRaceEnd(){
-    if(!mpState.inRoom || !mpState.raceActive) return;
+// 服务器广播：整场比赛结束（首选）
+socket.on('race:ended',function(){
+    clientEndRaceAndReturnRoom();
+});
 
-    var ids=Object.keys(mpState.players);
-    if(!ids.length)return;
-
-    var allFinished=true;
-    ids.forEach(function(id){
-        var p=mpState.players[id];
-        if(!p)return;
-        var lap=p.lap||0;
-        var done=p.finished || lap>=g.raceLaps;
-        if(!done) allFinished=false;
-    });
-    if(!allFinished)return;
-
+// 客户端统一结束逻辑：显示“比赛已结束”，5 秒后回房间
+function clientEndRaceAndReturnRoom(){
+    if(!mpState.inRoom)return;
     mpState.raceActive=false;
     g.on=0;
 
@@ -1100,7 +1084,26 @@ function checkLocalRaceEnd(){
         g.lap=0;
         g.progress=0;
         g.lastProgress=0;
+        mpState.raceActive=false;
     },5000);
+}
+
+// 兜底：在没有服务器 race:ended 的情况下，本地判断全员完赛后触发统一结束
+function tryClientEndRaceIfAllFinished(){
+    if(!mpState.inRoom || !mpState.raceActive)return;
+    var ids=Object.keys(mpState.players);
+    if(!ids.length)return;
+    var allFinished=true;
+    ids.forEach(function(id){
+        var p=mpState.players[id];
+        if(!p)return;
+        var lap=p.lap||0;
+        var done=p.finished || lap>=g.raceLaps;
+        if(!done)allFinished=false;
+    });
+    if(allFinished){
+        clientEndRaceAndReturnRoom();
+    }
 }
 
 // ===== HUD 排名 =====
@@ -1124,7 +1127,9 @@ function updateLocalRanking(){
     }
 
     if(!box)return;
-    if(!mpState.inRoom || !mpState.raceActive || !g.on){
+
+    // 只要仍在房间且这一局还没被宣告结束，就显示排行榜
+    if(!mpState.inRoom || !mpState.raceActive){
         box.innerHTML='';
         return;
     }
